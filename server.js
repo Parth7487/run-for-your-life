@@ -463,6 +463,15 @@ function handleMessage(ws, playerId, msg) {
       break;
     }
 
+    case 'SKIP_HEAD_START': {
+      const client = clients.get(ws);
+      if (!client?.roomId) return;
+      const room = rooms.get(client.roomId);
+      if (!room || room.state !== 'HEAD_START') return;
+      startHuntPhase(room);
+      break;
+    }
+
     case 'UPDATE_LOCATION': {
       const client = clients.get(ws);
       if (!client?.roomId) return;
@@ -629,7 +638,10 @@ function startHeadStartPhase(room) {
   broadcastToRoom(room, {
     type: 'PHASE_CHANGED',
     state: room.state,
+    startTime: room.phaseStartTime,
+    duration: room.config.headStart,
     timeRemaining: room.timeRemaining,
+    config: room.config,
     players: serializePlayers(room)
   });
 
@@ -665,9 +677,12 @@ function startHuntPhase(room) {
   broadcastToRoom(room, {
     type: 'PHASE_CHANGED',
     state: room.state,
+    startTime: room.phaseStartTime,
+    duration: room.config.roundLength,
     timeRemaining: room.timeRemaining,
     nextHunterPingIn: room.nextHunterPingIn,
     nextRunnerPingIn: room.nextRunnerPingIn,
+    config: room.config,
     players: serializePlayers(room)
   });
 

@@ -819,6 +819,31 @@ body::before {
   transition: width 1s linear;
 }
 
+#btn-skip-scatter {
+  background: rgba(145, 41, 37, 0.35);
+  border: 1px solid var(--crimson);
+  color: var(--parchment);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  padding: 12px 24px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  box-shadow: 0 0 20px rgba(145, 41, 37, 0.3);
+}
+
+#btn-skip-scatter:hover {
+  background: var(--crimson);
+  transform: translateY(-2px);
+  box-shadow: 0 0 30px rgba(145, 41, 37, 0.7);
+}
+
+#btn-skip-scatter:active {
+  transform: translateY(0);
+}
+
 /* 10. Active Hunt HUD */
 #screen-hunt {
   padding: 0;

@@ -37,6 +37,15 @@
   let hunterMarkers = new Map();
   let runnerPingMarkers = new Map();
   let currentRoomData = null;
+  let activeGameClockInterval = null;
+  let cachedLobbyPlayers = [];
+  let currentRoomConfig = {
+    headStart: 180,
+    roundLength: 2700,
+    hunterPingInterval: 30,
+    runnerPingInterval: 50,
+    arena: null
+  };
 
   // Joystick state
   const joystickState = { active: false, startX: 0, startY: 0, moveX: 0, moveY: 0 };
@@ -242,17 +251,21 @@
         break;
 
       case 'ROOM_STATE':
-        currentRoomData = msg;
+        currentRoomData = Object.assign(currentRoomData || {}, msg);
+        if (msg.config) currentRoomConfig = Object.assign(currentRoomConfig, msg.config);
         updateLobbyUI(msg);
         break;
 
       case 'PHASE_CHANGED':
-        currentRoomData = msg;
         handlePhaseChange(msg);
         break;
 
       case 'CLOCK_TICK':
         handleClockTick(msg);
+        break;
+
+      case 'LOCATION_UPDATE':
+        handlePeerLocation(msg);
         break;
 
       case 'PING_FIRED':
@@ -369,24 +382,7 @@
       code,
       player,
       (event) => {
-        // Handle broadcast events from other Supabase peers
-        if (event.type === 'LOCATION_UPDATE') {
-          handlePeerLocation(event.payload);
-        } else if (event.type === 'PING_FIRED') {
-          handlePingFired(event.payload);
-        } else if (event.type === 'PLAYER_TAGGED') {
-          handlePlayerTagged(event.payload);
-        } else if (event.type === 'PHASE_CHANGED') {
-          handlePhaseChange(event.payload);
-        } else if (event.type === 'GAME_OVER') {
-          handleGameOver(event.payload);
-        } else if (event.type === 'CHAT_MESSAGE') {
-          receiveChatMessage(event.payload);
-        } else if (event.type === 'PLAYER_DISCONNECTED_BUFFER') {
-          handlePlayerDisconnectedBuffer(event.payload);
-        } else if (event.type === 'PLAYER_RECONNECTED') {
-          handlePlayerReconnected(event.payload);
-        }
+        handleServerMessage(event);
       },
       (presencePlayers) => {
         if (presencePlayers && presencePlayers.length > 0) {
@@ -396,15 +392,15 @@
     );
   }
 
-  function handlePeerLocation(payload) {
-    if (payload.playerId === myPlayerId) return;
-    if (myAssignedRole === 'hunter' && payload.role === 'hunter') {
-      updateHunterPositions([{ id: payload.playerId, name: payload.name, lat: payload.lat, lng: payload.lng }]);
+  function handlePeerLocation(data) {
+    const payload = data.payload ? { ...data.payload, ...data } : data;
+    if (!payload || payload.playerId === myPlayerId) return;
+    if (myAssignedRole === 'hunter' && payload.role === 'hunter' && payload.lat && payload.lng) {
+      updateHunterPositions([{ id: payload.playerId, name: payload.name || 'Hunter', lat: payload.lat, lng: payload.lng }]);
     }
   }
 
   function updateLobbyWithPresence(presencePlayers) {
-    if (currentRoomData?.state && currentRoomData.state !== 'LOBBY') return;
     const formattedPlayers = presencePlayers.map((p) => ({
       id: p.id,
       name: p.name,
@@ -413,7 +409,10 @@
       connected: true,
       isTagged: p.isTagged || false
     }));
-    updateLobbyUI({ players: formattedPlayers });
+    cachedLobbyPlayers = formattedPlayers;
+    if (!currentRoomData?.state || currentRoomData.state === 'LOBBY') {
+      updateLobbyUI({ players: formattedPlayers });
+    }
   }
 
   // --- LOCATION PERMISSION SYSTEM ---
@@ -587,6 +586,15 @@
 
     const arena = { lat: center.lat, lng: center.lng, radius };
 
+    currentRoomConfig = {
+      arena,
+      roundLength,
+      pingInterval: runnerPingInterval,
+      hunterPingInterval,
+      runnerPingInterval,
+      headStart: 180
+    };
+
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(
         JSON.stringify({
@@ -603,6 +611,14 @@
     } else {
       // Direct client room creation if offline / Vercel
       const randomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+      currentRoomData = {
+        code: randomCode,
+        hostId: myPlayerId,
+        state: 'LOBBY',
+        config: currentRoomConfig,
+        timeRemaining: roundLength,
+        players: [{ id: myPlayerId, name, rolePreference: currentRole }]
+      };
       handleServerMessage({
         type: 'ROOM_CREATED',
         roomCode: randomCode,
@@ -612,7 +628,7 @@
         code: randomCode,
         hostId: myPlayerId,
         state: 'LOBBY',
-        config: { arena, roundLength, pingInterval: runnerPingInterval, hunterPingInterval, runnerPingInterval, headStart: 180 },
+        config: currentRoomConfig,
         timeRemaining: roundLength
       });
     }
@@ -681,21 +697,136 @@
     });
   });
 
+  // --- ROLE ASSIGNMENT ALGORITHM (1v1 DUEL & SQUAD SUPPORT) ---
+  function assignRolesForPlayers(players) {
+    if (!players || players.length === 0) return;
+
+    if (players.length === 2) {
+      // 1v1 Duel Mode: exactly 1 hunter and 1 runner
+      const p1 = players[0];
+      const p2 = players[1];
+
+      if (p1.rolePreference === 'hunter' && p2.rolePreference === 'runner') {
+        p1.assignedRole = 'hunter';
+        p2.assignedRole = 'runner';
+      } else if (p1.rolePreference === 'runner' && p2.rolePreference === 'hunter') {
+        p1.assignedRole = 'runner';
+        p2.assignedRole = 'hunter';
+      } else if (p1.rolePreference === 'hunter') {
+        p1.assignedRole = 'hunter';
+        p2.assignedRole = 'runner';
+      } else if (p2.rolePreference === 'hunter') {
+        p1.assignedRole = 'runner';
+        p2.assignedRole = 'hunter';
+      } else {
+        const rand = Math.random() < 0.5;
+        p1.assignedRole = rand ? 'hunter' : 'runner';
+        p2.assignedRole = rand ? 'runner' : 'hunter';
+      }
+    } else {
+      // Squad Mode: ~1/3 hunters, ~2/3 runners
+      const explicitHunters = players.filter((p) => p.rolePreference === 'hunter');
+      const explicitRunners = players.filter((p) => p.rolePreference === 'runner');
+      const randoms = players.filter((p) => p.rolePreference !== 'hunter' && p.rolePreference !== 'runner');
+
+      const targetHunters = Math.max(1, Math.floor(players.length / 3));
+      const assignedHunters = [];
+      const assignedRunners = [];
+
+      while (explicitHunters.length > 0 && assignedHunters.length < targetHunters) {
+        assignedHunters.push(explicitHunters.pop());
+      }
+      while (explicitHunters.length > 0) {
+        assignedRunners.push(explicitHunters.pop());
+      }
+      while (explicitRunners.length > 0) {
+        assignedRunners.push(explicitRunners.pop());
+      }
+      while (randoms.length > 0 && assignedHunters.length < targetHunters) {
+        assignedHunters.push(randoms.pop());
+      }
+      while (randoms.length > 0) {
+        assignedRunners.push(randoms.pop());
+      }
+
+      if (assignedHunters.length === 0 && assignedRunners.length > 0) {
+        assignedHunters.push(assignedRunners.pop());
+      } else if (assignedRunners.length === 0 && assignedHunters.length > 1) {
+        assignedRunners.push(assignedHunters.pop());
+      }
+
+      assignedHunters.forEach((p) => (p.assignedRole = 'hunter'));
+      assignedRunners.forEach((p) => (p.assignedRole = 'runner'));
+    }
+  }
+
   // --- START GAME (WITH 2-PLAYER 1v1 SUPPORT) ---
   document.getElementById('btn-start-game').addEventListener('click', () => {
     window.soundEngine?.playClick();
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'START_GAME' }));
     } else {
+      // Direct client / Supabase Realtime mode
+      const myName = document.getElementById('player-name-input').value.trim() || 'Operative';
+      const playersToAssign = (cachedLobbyPlayers && cachedLobbyPlayers.length > 0)
+        ? cachedLobbyPlayers.map((p) => ({ ...p }))
+        : [{ id: myPlayerId, name: myName, rolePreference: currentRole }];
+
+      if (!playersToAssign.some((p) => p.id === myPlayerId)) {
+        playersToAssign.push({ id: myPlayerId, name: myName, rolePreference: currentRole });
+      }
+
+      assignRolesForPlayers(playersToAssign);
+
+      const headStartSec = currentRoomConfig.headStart || 180;
       const startPayload = {
         state: 'HEAD_START',
-        timeRemaining: 180,
-        players: [{ id: myPlayerId, assignedRole: currentRole === 'hunter' ? 'hunter' : 'runner' }]
+        startTime: Date.now(),
+        duration: headStartSec,
+        timeRemaining: headStartSec,
+        config: currentRoomConfig,
+        players: playersToAssign
       };
+
+      currentRoomData = Object.assign(currentRoomData || {}, startPayload);
       window.supabaseGameManager.broadcastEvent('phase_change', startPayload);
       handlePhaseChange(startPayload);
     }
   });
+
+  // --- FAST-FORWARD / SKIP SCATTER HEAD START BUTTON ---
+  document.getElementById('btn-skip-scatter')?.addEventListener('click', () => {
+    window.soundEngine?.playClick();
+    triggerHuntPhaseTransition();
+  });
+
+  // --- TRANSITION FROM SCATTER TO ACTIVE HUNT ---
+  function triggerHuntPhaseTransition() {
+    if (activeGameClockInterval) {
+      clearInterval(activeGameClockInterval);
+      activeGameClockInterval = null;
+    }
+
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'SKIP_HEAD_START' }));
+    }
+
+    const roundDuration = currentRoomConfig.roundLength || 2700;
+    const huntPayload = {
+      state: 'HUNT',
+      startTime: Date.now(),
+      duration: roundDuration,
+      timeRemaining: roundDuration,
+      nextHunterPingIn: currentRoomConfig.hunterPingInterval || 30,
+      nextRunnerPingIn: currentRoomConfig.runnerPingInterval || 50,
+      config: currentRoomConfig,
+      players: currentRoomData?.players || cachedLobbyPlayers || []
+    };
+
+    currentRoomData = Object.assign(currentRoomData || {}, huntPayload);
+    window.supabaseGameManager.broadcastEvent('phase_change', huntPayload);
+    handlePhaseChange(huntPayload);
+  }
 
   // --- UPDATE LOBBY UI & 2-PLAYER 1v1 DUEL BADGE ---
   function updateLobbyUI(data) {
@@ -744,16 +875,139 @@
     return `${m.toString().padStart(2, '0')}:${rem.toString().padStart(2, '0')}`;
   }
 
+  // --- REAL-TIME SYNCHRONIZED CLIENT GAME CLOCK ---
+  function startClientGameClock(state, startTime, durationSec) {
+    if (activeGameClockInterval) {
+      clearInterval(activeGameClockInterval);
+      activeGameClockInterval = null;
+    }
+
+    const startTs = startTime || Date.now();
+    const totalDuration = durationSec > 0 ? durationSec : (state === 'HEAD_START' ? (currentRoomConfig.headStart || 180) : (currentRoomConfig.roundLength || 2700));
+
+    let lastHunterPingSec = -1;
+    let lastRunnerPingSec = -1;
+
+    const tick = () => {
+      const elapsed = Math.floor((Date.now() - startTs) / 1000);
+      const remaining = Math.max(0, totalDuration - elapsed);
+
+      if (state === 'HEAD_START') {
+        handleClockTick({
+          state: 'HEAD_START',
+          timeRemaining: remaining
+        });
+
+        if (remaining <= 0) {
+          clearInterval(activeGameClockInterval);
+          activeGameClockInterval = null;
+          triggerHuntPhaseTransition();
+        }
+      } else if (state === 'HUNT') {
+        const hInterval = currentRoomConfig.hunterPingInterval || 30;
+        const rInterval = currentRoomConfig.runnerPingInterval || 50;
+
+        const hPingIn = hInterval - (elapsed % hInterval);
+        const rPingIn = rInterval - (elapsed % rInterval);
+
+        handleClockTick({
+          state: 'HUNT',
+          timeRemaining: remaining,
+          hunterPingIn: hPingIn,
+          runnerPingIn: rPingIn,
+          nextPingIn: rPingIn
+        });
+
+        // Trigger radar pings on interval completion
+        if (elapsed > 0 && elapsed % hInterval === 0 && lastHunterPingSec !== elapsed) {
+          lastHunterPingSec = elapsed;
+          triggerPeerOrLocalPing('hunter');
+        }
+        if (elapsed > 0 && elapsed % rInterval === 0 && lastRunnerPingSec !== elapsed) {
+          lastRunnerPingSec = elapsed;
+          triggerPeerOrLocalPing('runner');
+        }
+
+        if (remaining <= 0) {
+          clearInterval(activeGameClockInterval);
+          activeGameClockInterval = null;
+          const gameOverPayload = {
+            winner: 'runners',
+            reason: 'SURVIVAL_TIME_EXPIRED',
+            stats: {
+              durationSeconds: totalDuration,
+              totalPings: Math.floor(elapsed / rInterval)
+            }
+          };
+          if (isHost) {
+            window.supabaseGameManager.broadcastEvent('game_over', gameOverPayload);
+          }
+          handleGameOver(gameOverPayload);
+        }
+      }
+    };
+
+    tick();
+    activeGameClockInterval = setInterval(tick, 1000);
+  }
+
+  // --- TRIGGER PEER OR LOCAL RADAR PINGS ---
+  function triggerPeerOrLocalPing(role) {
+    if (role === 'runner') {
+      window.soundEngine?.playPing();
+      if (myAssignedRole === 'runner') {
+        const pingPayload = {
+          type: 'PING_FIRED',
+          runnerPings: [{
+            id: myPlayerId,
+            name: document.getElementById('player-name-input').value.trim() || 'Operative',
+            lat: myPosition.lat,
+            lng: myPosition.lng
+          }]
+        };
+        window.supabaseGameManager.broadcastEvent('ping_fired', pingPayload);
+      }
+    } else if (role === 'hunter') {
+      if (myAssignedRole === 'hunter') {
+        const hunterPayload = {
+          type: 'HUNTER_PING_FIRED',
+          hunters: [{
+            id: myPlayerId,
+            name: document.getElementById('player-name-input').value.trim() || 'Operative',
+            lat: myPosition.lat,
+            lng: myPosition.lng
+          }]
+        };
+        window.supabaseGameManager.broadcastEvent('hunter_ping_fired', hunterPayload);
+      }
+    }
+  }
+
   // --- PHASE MANAGEMENT ---
   function handlePhaseChange(data) {
-    const me = data.players?.find((p) => p.id === myPlayerId);
+    const payload = data.payload ? { ...data.payload, ...data } : data;
+    currentRoomData = Object.assign(currentRoomData || {}, payload);
+
+    if (payload.config) {
+      currentRoomConfig = Object.assign(currentRoomConfig, payload.config);
+    }
+    if (payload.hunterPingInterval) currentRoomConfig.hunterPingInterval = payload.hunterPingInterval;
+    if (payload.runnerPingInterval) currentRoomConfig.runnerPingInterval = payload.runnerPingInterval;
+    if (payload.headStart) currentRoomConfig.headStart = payload.headStart;
+    if (payload.roundLength) currentRoomConfig.roundLength = payload.roundLength;
+    if (payload.arena) currentRoomConfig.arena = payload.arena;
+
+    const me = payload.players?.find((p) => p.id === myPlayerId);
     if (me && me.assignedRole) {
       myAssignedRole = me.assignedRole;
     } else if (!myAssignedRole) {
       myAssignedRole = currentRole === 'hunter' ? 'hunter' : 'runner';
     }
 
-    if (data.state === 'HEAD_START') {
+    const startTime = payload.startTime || Date.now();
+    const duration = payload.duration || (payload.state === 'HEAD_START' ? (currentRoomConfig.headStart || 180) : (currentRoomConfig.roundLength || 2700));
+
+    if (payload.state === 'HEAD_START') {
       showScreen('scatter');
       window.soundEngine?.playHeartbeat();
 
@@ -774,12 +1028,14 @@
         descText.textContent = 'Runners are scattering to hide. Maintain your position. No peeking.';
       }
 
+      startClientGameClock('HEAD_START', startTime, duration);
       startLocationTracking();
-    } else if (data.state === 'HUNT') {
+    } else if (payload.state === 'HUNT') {
       showScreen('hunt');
       window.soundEngine?.playPing();
       initGameMap();
       updateGameHUD();
+      startClientGameClock('HUNT', startTime, duration);
       startLocationTracking();
     }
   }
@@ -787,16 +1043,20 @@
   // --- CLOCK TICK & INDEPENDENT DUAL PING COUNTDOWNS ---
   function handleClockTick(data) {
     if (data.state === 'HEAD_START') {
-      document.getElementById('scatter-timer-text').textContent = formatTime(data.timeRemaining);
-      const totalHeadStart = currentRoomData?.config?.headStart || 180;
-      const progressPercent = (data.timeRemaining / totalHeadStart) * 100;
-      document.getElementById('scatter-progress-bar').style.width = `${progressPercent}%`;
+      const timerEl = document.getElementById('scatter-timer-text');
+      if (timerEl) timerEl.textContent = formatTime(data.timeRemaining);
 
-      if (data.timeRemaining <= 10) {
+      const totalHeadStart = currentRoomConfig?.headStart || currentRoomData?.config?.headStart || 180;
+      const progressPercent = Math.max(0, Math.min(100, (data.timeRemaining / totalHeadStart) * 100));
+      const progressBar = document.getElementById('scatter-progress-bar');
+      if (progressBar) progressBar.style.width = `${progressPercent}%`;
+
+      if (data.timeRemaining <= 10 && data.timeRemaining > 0) {
         window.soundEngine?.playHeartbeat(true);
       }
     } else if (data.state === 'HUNT') {
-      document.getElementById('hud-game-clock').textContent = formatTime(data.timeRemaining);
+      const gameClock = document.getElementById('hud-game-clock');
+      if (gameClock) gameClock.textContent = formatTime(data.timeRemaining);
 
       // Dual ping interval indicators
       const hunterClock = document.getElementById('hud-hunter-ping-clock');
@@ -805,8 +1065,8 @@
       const hPingIn = data.hunterPingIn !== undefined ? data.hunterPingIn : data.nextPingIn;
       const rPingIn = data.runnerPingIn !== undefined ? data.runnerPingIn : data.nextPingIn;
 
-      if (hunterClock) hunterClock.textContent = `${hPingIn}s`;
-      if (runnerClock) runnerClock.textContent = `${rPingIn}s`;
+      if (hunterClock && hPingIn !== undefined) hunterClock.textContent = `${hPingIn}s`;
+      if (runnerClock && rPingIn !== undefined) runnerClock.textContent = `${rPingIn}s`;
 
       if ((hPingIn <= 4 && hPingIn > 0) || (rPingIn <= 4 && rPingIn > 0)) {
         window.soundEngine?.playHeartbeat(false);

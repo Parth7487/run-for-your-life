@@ -66,34 +66,37 @@ class SupabaseGameManager {
       // 1. Listen for tactical broadcasts
       this.channel
         .on('broadcast', { event: 'location_update' }, ({ payload }) => {
-          onEvent({ type: 'LOCATION_UPDATE', payload });
+          onEvent({ type: 'LOCATION_UPDATE', payload, ...(payload || {}) });
         })
         .on('broadcast', { event: 'ping_fired' }, ({ payload }) => {
-          onEvent({ type: 'PING_FIRED', payload });
+          onEvent({ type: 'PING_FIRED', payload, ...(payload || {}) });
         })
         .on('broadcast', { event: 'hunter_ping_fired' }, ({ payload }) => {
-          onEvent({ type: 'HUNTER_PING_FIRED', payload });
+          onEvent({ type: 'HUNTER_PING_FIRED', payload, ...(payload || {}) });
         })
         .on('broadcast', { event: 'player_tagged' }, ({ payload }) => {
-          onEvent({ type: 'PLAYER_TAGGED', payload });
+          onEvent({ type: 'PLAYER_TAGGED', payload, ...(payload || {}) });
         })
         .on('broadcast', { event: 'chat_message' }, ({ payload }) => {
-          onEvent({ type: 'CHAT_MESSAGE', payload });
+          onEvent({ type: 'CHAT_MESSAGE', payload, ...(payload || {}) });
         })
         .on('broadcast', { event: 'player_disconnected_buffer' }, ({ payload }) => {
-          onEvent({ type: 'PLAYER_DISCONNECTED_BUFFER', payload });
+          onEvent({ type: 'PLAYER_DISCONNECTED_BUFFER', payload, ...(payload || {}) });
         })
         .on('broadcast', { event: 'player_reconnected' }, ({ payload }) => {
-          onEvent({ type: 'PLAYER_RECONNECTED', payload });
+          onEvent({ type: 'PLAYER_RECONNECTED', payload, ...(payload || {}) });
         })
         .on('broadcast', { event: 'phase_change' }, ({ payload }) => {
-          onEvent({ type: 'PHASE_CHANGED', payload });
+          onEvent({ type: 'PHASE_CHANGED', payload, ...(payload || {}) });
+        })
+        .on('broadcast', { event: 'clock_tick' }, ({ payload }) => {
+          onEvent({ type: 'CLOCK_TICK', payload, ...(payload || {}) });
         })
         .on('broadcast', { event: 'room_state' }, ({ payload }) => {
-          onEvent({ type: 'ROOM_STATE', payload });
+          onEvent({ type: 'ROOM_STATE', payload, ...(payload || {}) });
         })
         .on('broadcast', { event: 'game_over' }, ({ payload }) => {
-          onEvent({ type: 'GAME_OVER', payload });
+          onEvent({ type: 'GAME_OVER', payload, ...(payload || {}) });
         });
 
       // 2. Track Presence
