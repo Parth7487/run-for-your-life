@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>RUN FOR YOUR LIFE - Real-Life Tactical Game</title>
+  <meta name="description" content="Real-life hide-and-seek on your phone. Runners hide, hunters chase on foot. Run for your life. Designed and developed by Shopifydevstudio.">
+  <meta name="theme-color" content="#912925">
+
+  <!-- Leaflet CSS for Map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="app">
+
+  <!-- Boundary Flash Warning (Appears when runner leaves zone) -->
+  <div id="boundary-alert" class="boundary-warning"></div>
+
+  <!-- 1. SPLASH SCREEN -->
+  <section id="screen-splash" class="screen active">
+    <div class="splash-box">
+      <div class="brand-sigil" style="width: 64px; height: 64px; font-size: 32px; border-width: 2px; margin-bottom: 20px;">R</div>
+      <h1 class="splash-title-huge">RUN FOR<br>YOUR LIFE</h1>
+      <p class="splash-tagline">REAL-LIFE TACTICAL HIDE & SEEK</p>
+    </div>
+  </section>
+
+  <!-- 2. LANDING SCREEN -->
+  <section id="screen-landing" class="screen">
+    <header class="app-header">
+      <div class="brand-badge">
+        <div class="brand-sigil">R</div>
+        <div class="brand-text-lockup">
+          <span class="brand-main-name">RUN FOR YOUR LIFE</span>
+          <span class="brand-sub-badge">TACTICAL RADAR</span>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="btn-open-settings" class="icon-button" title="Supabase Database Settings">⚙️</button>
+        <button id="sound-btn" class="icon-button" title="Toggle Sound">🔊</button>
+      </div>
+    </header>
+
+    <div class="hero-section">
+      <span class="eyebrow-badge">TACTICAL GPS GAME</span>
+      <h2 class="hero-title">Runners hide.<br>Hunters chase.</h2>
+      <p class="hero-subtitle">The phone acts as your referee. Drop a boundary zone over your city or park, choose your team, and stay on foot. Every second counts.</p>
+    </div>
+
+    <div class="input-group">
+      <label class="input-label" for="player-name-input">OPERATIVE CODENAME</label>
+      <input type="text" id="player-name-input" class="text-input" placeholder="e.g. Phantom, Vesper, Nomad" maxlength="16">
+    </div>
+
+    <div class="menu-grid">
+      <button id="btn-open-host" class="action-card primary">
+        <span class="card-title">Host Arena</span>
+        <span class="card-desc">Set the play boundary on the map and invite friends with a game code.</span>
+      </button>
+
+      <button id="btn-open-join" class="action-card">
+        <span class="card-title">Join Game</span>
+        <span class="card-desc">Enter a 6-letter room code to jump into an active operation.</span>
+      </button>
+    </div>
+
+    <footer class="app-footer">
+      <p class="footer-credit">Designed and developed by <b>Shopifydevstudio</b></p>
+    </footer>
+  </section>
+
+  <!-- 3. HOST ARENA SETUP SCREEN -->
+  <section id="screen-host-setup" class="screen">
+    <header class="app-header">
+      <div class="brand-badge" id="host-back-btn">
+        <button class="icon-button" style="width: 36px; height: 36px;">←</button>
+        <span class="brand-main-name" style="font-size: 18px;">Setup Arena</span>
+      </div>
+    </header>
+
+    <span class="eyebrow-badge">1. Place the Zone</span>
+    <p style="font-size: 13px; color: var(--parchment-muted); margin-bottom: 12px;">Drag the map to position the center of the play zone.</p>
+
+    <div class="map-wrapper">
+      <div id="setup-map"></div>
+      <div class="map-crosshair"></div>
+    </div>
+
+    <div class="input-group">
+      <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+        <span class="input-label" style="margin: 0;">Zone Radius</span>
+        <b id="radius-display" style="color: var(--parchment); font-family: var(--font-mono);">300 m</b>
+      </div>
+      <input type="range" id="radius-slider" min="100" max="2500" step="50" value="300" style="width: 100%; accent-color: var(--crimson); height: 6px; cursor: pointer;">
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px;">
+      <div>
+        <label class="input-label">Round Length</label>
+        <select id="round-length-select" class="text-input" style="padding: 12px 14px;">
+          <option value="900">15 min</option>
+          <option value="1800">30 min</option>
+          <option value="2700" selected>45 min</option>
+          <option value="3600">60 min</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="input-label">Ping Every</label>
+        <select id="ping-interval-select" class="text-input" style="padding: 12px 14px;">
+          <option value="60">1 min (Fast)</option>
+          <option value="180">3 min</option>
+          <option value="300" selected>5 min</option>
+          <option value="480">8 min</option>
+        </select>
+      </div>
+    </div>
+
+    <button id="btn-confirm-create-room" class="btn btn-primary">Create Lobby</button>
+
+    <footer class="app-footer">
+      <p class="footer-credit">Designed and developed by <b>Shopifydevstudio</b></p>
+    </footer>
+  </section>
+
+  <!-- 4. JOIN ROOM SCREEN -->
+  <section id="screen-join" class="screen">
+    <header class="app-header">
+      <div class="brand-badge" id="join-back-btn">
+        <button class="icon-button" style="width: 36px; height: 36px;">←</button>
+        <span class="brand-main-name" style="font-size: 18px;">Join Operation</span>
+      </div>
+    </header>
+
+    <span class="eyebrow-badge">ENTER 6-LETTER CODE</span>
+    <h2 class="hero-title" style="font-size: 32px;">Game Code</h2>
+    
+    <div class="code-display" id="join-code-container">
+      <div class="code-digit"></div>
+      <div class="code-digit"></div>
+      <div class="code-digit"></div>
+      <div class="code-digit"></div>
+      <div class="code-digit"></div>
+      <div class="code-digit"></div>
+    </div>
+
+    <input type="text" id="join-code-input" class="text-input" placeholder="e.g. K7Q2FX" maxlength="6" style="text-transform: uppercase; font-family: var(--font-mono); text-align: center; letter-spacing: 0.25em; font-size: 24px; margin-bottom: 24px;">
+
+    <button id="btn-submit-join" class="btn btn-primary">Join Operation</button>
+
+    <footer class="app-footer">
+      <p class="footer-credit">Designed and developed by <b>Shopifydevstudio</b></p>
+    </footer>
+  </section>
+
+  <!-- 5. LOBBY SCREEN -->
+  <section id="screen-lobby" class="screen">
+    <header class="app-header">
+      <div class="brand-badge">
+        <span class="eyebrow-badge" style="margin: 0; padding: 4px 8px;">ROOM</span>
+        <span id="lobby-code-display" style="font-family: var(--font-mono); letter-spacing: 0.1em; color: var(--parchment); font-size: 18px; font-weight: 700;">------</span>
+      </div>
+      <button id="btn-copy-code" class="btn btn-secondary" style="width: auto; height: 38px; padding: 0 14px; font-size: 12px;">Copy Link</button>
+    </header>
+
+    <div style="text-align: center; margin-bottom: 16px;">
+      <span class="eyebrow-badge" style="background: var(--brass);">ROOM CODE</span>
+      <h2 id="lobby-big-code" style="font-size: 42px; font-family: var(--font-mono); letter-spacing: 0.12em; color: var(--parchment); margin: 4px 0 8px;">------</h2>
+      <p style="font-size: 12px; color: var(--parchment-muted);">Players join with this code on their phones.</p>
+    </div>
+
+    <span class="eyebrow-badge">Choose Your Allegiance</span>
+    <div class="role-cards">
+      <div class="role-card" data-role="hunter">
+        <div class="role-title" style="color: #60a5fa;">Hunter</div>
+        <div class="role-desc">You're it. Track and tag.</div>
+      </div>
+      <div class="role-card" data-role="runner">
+        <div class="role-title" style="color: var(--parchment);">Runner</div>
+        <div class="role-desc">Run & stay hidden.</div>
+      </div>
+      <div class="role-card selected" data-role="random">
+        <div class="role-title">Random</div>
+        <div class="role-desc">Auto-balance teams.</div>
+      </div>
+    </div>
+
+    <div class="fairness-box">
+      <div class="fairness-bar">
+        <div id="fairness-hunter-bar" class="fairness-hunters" style="width: 50%;"></div>
+        <div id="fairness-runner-bar" class="fairness-runners" style="width: 50%;"></div>
+      </div>
+      <div class="fairness-text">
+        <span id="lobby-hunter-count">Hunters: 0</span>
+        <span id="lobby-runner-count">Runners: 0</span>
+      </div>
+    </div>
+
+    <span class="eyebrow-badge">Operatives Connected (<span id="lobby-player-count">0</span>)</span>
+    <div class="player-list" id="lobby-player-list"></div>
+
+    <div style="margin-top: auto;">
+      <button id="btn-start-game" class="btn btn-primary" style="display: none;">Launch Operation</button>
+      <div id="host-waiting-msg" style="text-align: center; font-size: 13px; color: var(--parchment-muted); padding: 12px; display: block;">
+        Waiting for host to launch the operation...
+      </div>
+    </div>
+
+    <footer class="app-footer">
+      <p class="footer-credit">Designed and developed by <b>Shopifydevstudio</b></p>
+    </footer>
+  </section>
+
+  <!-- 6. SCATTER / HEAD START SCREEN -->
+  <section id="screen-scatter" class="screen">
+    <div class="scatter-banner">
+      <div id="scatter-role-badge" class="eyebrow-badge" style="background: var(--brass);">YOUR ROLE · RUNNER</div>
+      <div id="scatter-action-word" class="scatter-huge-word">RUN.</div>
+      
+      <div class="scatter-progress-track">
+        <div id="scatter-progress-bar" class="scatter-progress-bar"></div>
+      </div>
+
+      <div id="scatter-timer-text" class="huge-countdown">03:00</div>
+      
+      <p id="scatter-desc-text" style="font-size: 15px; color: var(--parchment-muted); max-width: 360px; margin: 0 auto; line-height: 1.5;">
+        Get away and hide inside the zone. Hunters are locked waiting.
+      </p>
+    </div>
+
+    <footer class="app-footer">
+      <p class="footer-credit">Designed and developed by <b>Shopifydevstudio</b></p>
+    </footer>
+  </section>
+
+  <!-- 7. ACTIVE HUNT SCREEN -->
+  <section id="screen-hunt" class="screen">
+    <!-- Top Tactical HUD -->
+    <div class="game-hud-header">
+      <div class="hud-pill">
+        <span id="hud-role-pill" class="player-role-badge badge-hunter">HUNTER</span>
+        <span id="hud-game-clock" class="hud-time">45:00</span>
+      </div>
+
+      <div class="hud-pill hud-ping-timer">
+        <span class="hud-ping-label">Next Ping</span>
+        <span id="hud-ping-clock" class="hud-ping-val">05:00</span>
+      </div>
+    </div>
+
+    <!-- Fullscreen Tactical Map -->
+    <div id="game-map" style="width: 100%; height: 100%;"></div>
+
+    <!-- Virtual Joystick for Testing / Indoor Simulation -->
+    <div id="joystick" class="joystick-container">
+      <div id="joystick-thumb" class="joystick-thumb"></div>
+      <span class="joystick-label">Virtual Move</span>
+    </div>
+
+    <!-- Bottom Action Controls -->
+    <div class="game-hud-bottom">
+      <div class="game-status-sheet">
+        <div class="status-stat-group">
+          <span class="status-stat-label">Runners Left</span>
+          <span id="hud-runners-alive" class="status-stat-value">-- / --</span>
+        </div>
+
+        <div style="display: flex; gap: 8px;">
+          <button id="btn-toggle-gps" class="btn btn-secondary" style="width: auto; height: 40px; padding: 0 12px; font-size: 12px;">🕹️ Sim</button>
+          <button id="btn-force-ping" class="btn btn-secondary" style="width: auto; height: 40px; padding: 0 12px; font-size: 12px;" title="Test Force Ping">📡 Ping</button>
+        </div>
+      </div>
+
+      <!-- Tag Action Button for Hunter -->
+      <button id="btn-tag-action" class="btn btn-tag-action">
+        TAG A RUNNER
+      </button>
+
+      <!-- Self Tag Confirmation for Runner -->
+      <button id="btn-runner-tagged-action" class="btn btn-secondary" style="display: none; border-color: var(--crimson); color: var(--parchment);">
+        I'VE BEEN TAGGED
+      </button>
+    </div>
+  </section>
+
+  <!-- 8. GAME OVER SCREEN -->
+  <section id="screen-game-over" class="screen">
+    <div style="text-align: center; margin: auto 0;">
+      <span class="eyebrow-badge">MATCH TERMINATED</span>
+      <h1 id="game-over-winner-title" class="hero-title" style="font-size: 46px; color: var(--parchment); margin-bottom: 12px;">HUNTERS WON</h1>
+      <p id="game-over-reason" style="font-size: 15px; color: var(--parchment-muted); margin-bottom: 26px;">All runners were tagged before time expired.</p>
+
+      <div style="background: var(--obsidian-surface); border: 1px solid var(--parchment-dim); border-radius: 14px; padding: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; text-align: left; margin-bottom: 26px;">
+        <div>
+          <span class="status-stat-label">Total Duration</span>
+          <div id="stat-match-duration" class="status-stat-value">45 min</div>
+        </div>
+        <div>
+          <span class="status-stat-label">Radar Pings</span>
+          <div id="stat-match-pings" class="status-stat-value">9 pings</div>
+        </div>
+      </div>
+
+      <button id="btn-return-lobby" class="btn btn-primary">Return to Menu</button>
+    </div>
+
+    <footer class="app-footer">
+      <p class="footer-credit">Designed and developed by <b>Shopifydevstudio</b></p>
+    </footer>
+  </section>
+
+  <!-- MODAL: Location Permission Modal -->
+  <div id="location-permission-modal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="brand-sigil" style="margin: 0 auto 16px;">📍</div>
+      <h3 class="modal-title">Enable GPS Location</h3>
+      <p class="modal-desc">
+        <b>Run for Your Life</b> requires your device's live location to place you on the arena map, detect boundaries, and broadcast radar pings.<br><br>
+        Your coordinates are encrypted and streamed live only to operatives in your room.
+      </p>
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <button id="btn-allow-gps" class="btn btn-primary">Allow Live GPS Feed</button>
+        <button id="btn-deny-gps" class="btn btn-secondary">Play with Virtual Joystick</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Tag Player Selection Dialog -->
+  <div id="tag-modal" class="modal-overlay">
+    <div class="modal-card">
+      <h3 class="modal-title">Tag Runner</h3>
+      <p class="modal-desc">Select which runner you have tagged in person:</p>
+      <div id="tag-runner-options" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;"></div>
+      <button id="btn-cancel-tag" class="btn btn-secondary">Cancel</button>
+    </div>
+  </div>
+
+  <!-- MODAL: Supabase Database Settings Dialog -->
+  <div id="settings-modal" class="modal-overlay">
+    <div class="modal-card">
+      <h3 class="modal-title">Database Settings</h3>
+      <p class="modal-desc">Configure your Supabase Database & Realtime connection:</p>
+      <div style="text-align: left; margin-bottom: 16px;">
+        <label class="input-label">Supabase Project URL</label>
+        <input type="text" id="supabase-url-input" class="text-input" placeholder="https://xyz.supabase.co" style="font-size: 13px; margin-bottom: 12px;">
+
+        <label class="input-label">Supabase Anon Key</label>
+        <input type="password" id="supabase-key-input" class="text-input" placeholder="ey..." style="font-size: 13px;">
+      </div>
+      <div style="display: flex; gap: 10px;">
+        <button id="btn-save-settings" class="btn btn-primary">Save & Connect</button>
+        <button id="btn-close-settings" class="btn btn-secondary">Close</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Supabase JS Client SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Supabase Integration Manager -->
+<script src="supabase-client.js"></script>
+<!-- Leaflet Library -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<!-- Procedural Web Audio Engine -->
+<script src="sound.js"></script>
+<!-- Application Script -->
+<script src="app.js"></script>
+
+</body>
+</html>

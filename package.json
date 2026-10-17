@@ -1,0 +1,14 @@
+{
+  "name": "scram-web",
+  "version": "1.0.0",
+  "description": "Real-life hide-and-seek web application inspired by SCRAM",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

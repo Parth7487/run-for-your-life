@@ -1,0 +1,927 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Archivo:wdth,wght@62..125,700..900&display=swap');
+
+/* =========================================================
+   RUN FOR YOUR LIFE - Brand Kit Design System
+   Palette & Spec derived from brand kit/image.png
+   Designed & Developed by Shopifydevstudio
+   ========================================================= */
+
+:root {
+  /* Brand Kit Palette */
+  --crimson: #912925;
+  --crimson-hover: #78201d;
+  --crimson-glow: rgba(145, 41, 37, 0.45);
+  
+  --parchment: #F9E8AC;
+  --parchment-muted: rgba(249, 232, 172, 0.75);
+  --parchment-dim: rgba(249, 232, 172, 0.45);
+  
+  --obsidian: #151413;
+  --obsidian-surface: #211f1e;
+  --obsidian-surface-hover: #2d2a29;
+  --obsidian-light: #2c2927;
+  
+  --brass: #6A621C;
+  --brass-glow: rgba(106, 98, 28, 0.35);
+
+  --hunter-blue: #3b82f6;
+  --runner-gold: #F9E8AC;
+
+  /* Typography */
+  --font-display: 'Cinzel Decorative', serif;
+  --font-title: 'Archivo', sans-serif;
+  --font-mono: 'Space Mono', monospace;
+
+  /* Layout & Insets */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --pop: cubic-bezier(.34, 1.56, .64, 1);
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+  height: 100%;
+  background-color: var(--obsidian);
+}
+
+body {
+  font-family: var(--font-mono);
+  background-color: var(--obsidian);
+  color: var(--parchment);
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Background grain effect */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: radial-gradient(rgba(249, 232, 172, 0.04) 1px, transparent 1px);
+  background-size: 24px 24px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Typography helper classes */
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+
+.font-title {
+  font-family: var(--font-title);
+  font-stretch: 110%;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+.eyebrow-badge {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--obsidian);
+  background: var(--crimson);
+  color: #fff;
+  padding: 4px 10px;
+  border-radius: 4px;
+  display: inline-block;
+  margin-bottom: 12px;
+}
+
+/* App Viewport Container */
+#app {
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  min-height: 100vh;
+  min-height: 100dvh;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--obsidian);
+  box-shadow: 0 0 70px rgba(0, 0, 0, 0.95);
+  border-left: 1px solid rgba(249, 232, 172, 0.08);
+  border-right: 1px solid rgba(249, 232, 172, 0.08);
+  z-index: 2;
+}
+
+/* Screen Management */
+.screen {
+  display: none;
+  flex-direction: column;
+  flex: 1;
+  width: 100%;
+  animation: fadeInScreen 0.25s var(--pop);
+  padding: calc(var(--safe-top) + 20px) 20px calc(var(--safe-bottom) + 24px);
+}
+
+.screen.active {
+  display: flex;
+}
+
+@keyframes fadeInScreen {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 1. Splash Screen */
+#screen-splash {
+  background: var(--crimson);
+  color: var(--parchment);
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  z-index: 2000;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.splash-box {
+  position: relative;
+  width: 100%;
+  max-width: 340px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+
+.splash-title-huge {
+  font-family: var(--font-display);
+  font-size: 54px;
+  line-height: 0.95;
+  color: var(--parchment);
+  text-transform: uppercase;
+  margin-bottom: 14px;
+  text-shadow: 0 4px 20px rgba(0,0,0,0.6);
+}
+
+.splash-tagline {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--parchment);
+  opacity: 0.85;
+}
+
+/* 2. Header & Branding */
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 22px;
+}
+
+.brand-badge {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.brand-sigil {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  background: var(--crimson);
+  border: 1px solid var(--parchment);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 900;
+  color: var(--parchment);
+}
+
+.brand-text-lockup {
+  display: flex;
+  flex-direction: column;
+}
+
+.brand-main-name {
+  font-family: var(--font-display);
+  font-size: 20px;
+  line-height: 1.1;
+  color: var(--parchment);
+  text-transform: uppercase;
+}
+
+.brand-sub-badge {
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  color: var(--brass);
+  text-transform: uppercase;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.icon-button {
+  background: var(--obsidian-surface);
+  border: 1px solid var(--parchment-dim);
+  color: var(--parchment);
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s var(--pop);
+}
+
+.icon-button:hover {
+  background: var(--obsidian-surface-hover);
+  border-color: var(--parchment);
+  transform: scale(1.05);
+}
+
+/* 3. Hero & Titles */
+.hero-title {
+  font-family: var(--font-display);
+  font-size: 42px;
+  font-weight: 900;
+  line-height: 1.05;
+  color: var(--parchment);
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.hero-subtitle {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--parchment-muted);
+  line-height: 1.6;
+  margin-bottom: 26px;
+}
+
+/* 4. Action Cards */
+.menu-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: auto;
+  margin-bottom: 20px;
+}
+
+.action-card {
+  background: var(--obsidian-surface);
+  border: 1px solid var(--parchment-dim);
+  border-radius: 14px;
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  cursor: pointer;
+  transition: transform 0.25s var(--pop), background 0.2s, border-color 0.2s;
+  text-align: left;
+}
+
+.action-card:hover {
+  border-color: var(--parchment);
+  background: var(--obsidian-surface-hover);
+  transform: translateY(-2px);
+}
+
+.action-card.primary {
+  background: var(--crimson);
+  border-color: var(--parchment);
+  box-shadow: 0 8px 24px var(--crimson-glow);
+}
+
+.action-card.primary:hover {
+  background: var(--crimson-hover);
+}
+
+.card-title {
+  font-family: var(--font-display);
+  font-size: 26px;
+  color: var(--parchment);
+  text-transform: uppercase;
+}
+
+.card-desc {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--parchment-muted);
+  line-height: 1.45;
+}
+
+.action-card.primary .card-desc {
+  color: #fff;
+  opacity: 0.9;
+}
+
+/* 5. Inputs & Buttons */
+.input-group {
+  margin-bottom: 18px;
+}
+
+.input-label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--parchment-muted);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.text-input {
+  width: 100%;
+  background: var(--obsidian-surface);
+  border: 1px solid var(--parchment-dim);
+  border-radius: 12px;
+  padding: 16px 18px;
+  color: var(--parchment);
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 600;
+  transition: border-color 0.2s;
+  outline: none;
+}
+
+.text-input:focus {
+  border-color: var(--parchment);
+  box-shadow: 0 0 0 3px var(--crimson-glow);
+}
+
+.btn {
+  height: 52px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 24px;
+  border-radius: 12px;
+  font-family: var(--font-title);
+  font-size: 16px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: transform .25s var(--pop), background .2s, border-color .2s;
+  width: 100%;
+}
+
+.btn:active {
+  transform: scale(0.97);
+}
+
+.btn-primary {
+  background: var(--crimson);
+  border-color: var(--parchment);
+  color: var(--parchment);
+  box-shadow: 0 6px 18px var(--crimson-glow);
+}
+
+.btn-primary:hover {
+  background: var(--crimson-hover);
+}
+
+.btn-secondary {
+  background: var(--obsidian-surface);
+  border: 1px solid var(--parchment-dim);
+  color: var(--parchment);
+}
+
+.btn-secondary:hover {
+  background: var(--obsidian-surface-hover);
+  border-color: var(--parchment);
+}
+
+/* 6. Room Code Box */
+.code-display {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 16px 0 24px;
+}
+
+.code-digit {
+  width: 48px;
+  height: 64px;
+  background: var(--obsidian-surface);
+  border: 2px solid var(--parchment-dim);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--parchment);
+}
+
+.code-digit.filled {
+  border-color: var(--parchment);
+  background: rgba(145, 41, 37, 0.2);
+}
+
+/* 7. Setup & Tactical Maps */
+.map-wrapper {
+  position: relative;
+  width: 100%;
+  height: 290px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid var(--parchment-dim);
+  margin-bottom: 20px;
+}
+
+#setup-map, #game-map {
+  width: 100%;
+  height: 100%;
+  background: #0d0c0c;
+}
+
+.map-crosshair {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 24px;
+  height: 24px;
+  pointer-events: none;
+  z-index: 500;
+}
+
+.map-crosshair::before, .map-crosshair::after {
+  content: '';
+  position: absolute;
+  background: var(--crimson);
+}
+
+.map-crosshair::before { top: 11px; left: 0; right: 0; height: 2px; }
+.map-crosshair::after { left: 11px; top: 0; bottom: 0; width: 2px; }
+
+/* 8. Role Cards & Fairness Bar */
+.role-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.role-card {
+  background: var(--obsidian-surface);
+  border: 1px solid var(--parchment-dim);
+  border-radius: 12px;
+  padding: 16px 8px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s var(--pop);
+}
+
+.role-card.selected {
+  border-color: var(--parchment);
+  background: rgba(145, 41, 37, 0.25);
+}
+
+.role-card.selected.hunter {
+  border-color: var(--hunter-blue);
+  background: rgba(59, 130, 246, 0.18);
+}
+
+.role-card.selected.runner {
+  border-color: var(--brass);
+  background: rgba(106, 98, 28, 0.25);
+}
+
+.role-title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+  color: var(--parchment);
+}
+
+.role-desc {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--parchment-muted);
+  line-height: 1.3;
+}
+
+.fairness-box {
+  background: var(--obsidian-surface);
+  border: 1px solid var(--parchment-dim);
+  border-radius: 12px;
+  padding: 14px 18px;
+  margin: 12px 0 20px;
+}
+
+.fairness-bar {
+  display: flex;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 8px;
+  background: rgba(249, 232, 172, 0.1);
+}
+
+.fairness-hunters { background: var(--hunter-blue); transition: width 0.3s; }
+.fairness-runners { background: var(--brass); transition: width 0.3s; }
+
+.fairness-text {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--parchment-muted);
+  display: flex;
+  justify-content: space-between;
+}
+
+.player-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 180px;
+  overflow-y: auto;
+  margin-bottom: 20px;
+}
+
+.player-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--obsidian-surface);
+  border: 1px solid var(--parchment-dim);
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-family: var(--font-mono);
+}
+
+.player-role-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.badge-hunter {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.4);
+}
+
+.badge-runner {
+  background: rgba(106, 98, 28, 0.25);
+  color: var(--parchment);
+  border: 1px solid var(--brass);
+}
+
+.badge-random {
+  background: rgba(249, 232, 172, 0.08);
+  color: var(--parchment-muted);
+}
+
+/* 9. Scatter Screen */
+.scatter-banner {
+  text-align: center;
+  margin: auto 0;
+}
+
+.scatter-huge-word {
+  font-family: var(--font-display);
+  font-size: 78px;
+  line-height: 0.9;
+  color: var(--parchment);
+  text-shadow: 0 4px 25px rgba(145, 41, 37, 0.5);
+  margin-bottom: 24px;
+}
+
+.huge-countdown {
+  font-family: var(--font-mono);
+  font-size: 56px;
+  font-weight: 700;
+  color: var(--crimson);
+  margin-bottom: 18px;
+}
+
+.scatter-progress-track {
+  width: 100%;
+  height: 8px;
+  background: rgba(249, 232, 172, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+.scatter-progress-bar {
+  height: 100%;
+  background: var(--crimson);
+  width: 100%;
+  transition: width 1s linear;
+}
+
+/* 10. Active Hunt HUD */
+#screen-hunt {
+  padding: 0;
+  position: absolute;
+  inset: 0;
+}
+
+.game-hud-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  padding: calc(var(--safe-top) + 14px) 16px 12px;
+  background: linear-gradient(180deg, rgba(21, 20, 19, 0.96) 0%, rgba(21, 20, 19, 0.8) 75%, transparent 100%);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  pointer-events: none;
+}
+
+.hud-pill {
+  pointer-events: auto;
+  background: rgba(33, 31, 30, 0.9);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--parchment-dim);
+  border-radius: 9999px;
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hud-time {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.hud-ping-timer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.hud-ping-label {
+  font-size: 9px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--parchment-dim);
+}
+
+.hud-ping-val {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--crimson);
+}
+
+.game-hud-bottom {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  padding: 14px 16px calc(var(--safe-bottom) + 16px);
+  background: linear-gradient(0deg, rgba(21, 20, 19, 0.98) 0%, rgba(21, 20, 19, 0.85) 75%, transparent 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.game-status-sheet {
+  background: rgba(33, 31, 30, 0.94);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--parchment-dim);
+  border-radius: 16px;
+  padding: 12px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.status-stat-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.status-stat-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--parchment-muted);
+}
+
+.status-stat-value {
+  font-family: var(--font-display);
+  font-size: 20px;
+  color: var(--parchment);
+}
+
+.btn-tag-action {
+  height: 54px;
+  border-radius: 12px;
+  background: var(--crimson);
+  border: 1px solid var(--parchment);
+  color: var(--parchment);
+  font-size: 16px;
+  box-shadow: 0 8px 24px var(--crimson-glow);
+}
+
+/* 11. Virtual Joystick & Overlays */
+.joystick-container {
+  position: absolute;
+  bottom: 120px;
+  right: 20px;
+  width: 105px;
+  height: 105px;
+  background: rgba(33, 31, 30, 0.75);
+  backdrop-filter: blur(12px);
+  border: 2px solid var(--parchment-dim);
+  border-radius: 50%;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+}
+
+.joystick-thumb {
+  width: 40px;
+  height: 40px;
+  background: var(--crimson);
+  border: 1px solid var(--parchment);
+  border-radius: 50%;
+  box-shadow: 0 4px 14px var(--crimson-glow);
+  pointer-events: none;
+  transform: translate(0px, 0px);
+  transition: transform 0.05s ease-out;
+}
+
+.joystick-label {
+  position: absolute;
+  bottom: -20px;
+  font-size: 9px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--parchment-muted);
+}
+
+.boundary-warning {
+  position: absolute;
+  inset: 0;
+  border: 8px solid var(--crimson);
+  pointer-events: none;
+  z-index: 1200;
+  animation: boundaryFlash 1s infinite alternate;
+  display: none;
+}
+
+@keyframes boundaryFlash {
+  from { opacity: 0.3; }
+  to { opacity: 1; }
+}
+
+/* 12. Sonar Ripple Animation for Pings */
+.sonar-ping-marker {
+  position: relative;
+  width: 24px;
+  height: 24px;
+}
+
+.sonar-dot {
+  width: 14px;
+  height: 14px;
+  background: var(--crimson);
+  border: 2px solid var(--parchment);
+  border-radius: 50%;
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  box-shadow: 0 0 14px var(--crimson);
+}
+
+.sonar-ripple {
+  position: absolute;
+  inset: -14px;
+  border: 2px solid var(--crimson);
+  border-radius: 50%;
+  animation: rippleExpand 2s infinite ease-out;
+  pointer-events: none;
+}
+
+@keyframes rippleExpand {
+  0% { transform: scale(0.3); opacity: 1; }
+  100% { transform: scale(2.8); opacity: 0; }
+}
+
+.sonar-tag {
+  position: absolute;
+  top: -24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--obsidian);
+  color: var(--parchment);
+  border: 1px solid var(--crimson);
+  font-size: 9px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+/* 13. Modals & Dialogs */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 10, 10, 0.88);
+  backdrop-filter: blur(10px);
+  z-index: 2500;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.modal-overlay.active {
+  display: flex;
+}
+
+.modal-card {
+  background: var(--obsidian-surface);
+  border: 1px solid var(--parchment);
+  border-radius: 16px;
+  padding: 26px;
+  max-width: 420px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+}
+
+.modal-title {
+  font-family: var(--font-display);
+  font-size: 24px;
+  color: var(--parchment);
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+.modal-desc {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--parchment-muted);
+  line-height: 1.5;
+  margin-bottom: 22px;
+}
+
+/* 14. Footer Requirement */
+.app-footer {
+  text-align: center;
+  padding: 16px 0 8px;
+  margin-top: auto;
+  border-top: 1px solid rgba(249, 232, 172, 0.08);
+}
+
+.footer-credit {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--parchment-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.footer-credit b {
+  color: var(--parchment);
+}
