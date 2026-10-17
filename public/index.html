@@ -9,6 +9,10 @@
 
   <!-- Leaflet CSS for Map -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <!-- Google Fonts Preconnect & Typographic Engine (Eleven Eleven Twin: Unbounded, Syne, Outfit, Space Mono) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;700;800;900&family=Syne:wght@600;700;800&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- Stylesheet -->
   <link rel="stylesheet" href="style.css">
 </head>
@@ -57,12 +61,18 @@
 
     <div class="menu-grid">
       <button id="btn-open-host" class="action-card primary">
-        <span class="card-title">Host Arena</span>
+        <div class="card-header-row">
+          <span class="card-title">Host Arena</span>
+          <span class="card-arrow">→</span>
+        </div>
         <span class="card-desc">Set the play boundary on the map and invite friends with a game code.</span>
       </button>
 
       <button id="btn-open-join" class="action-card">
-        <span class="card-title">Join Game</span>
+        <div class="card-header-row">
+          <span class="card-title">Join Game</span>
+          <span class="card-arrow">→</span>
+        </div>
         <span class="card-desc">Enter a 6-letter room code to jump into an active operation.</span>
       </button>
     </div>
