@@ -1266,16 +1266,16 @@
     showScreen('landing');
   });
 
-  // Force Ping Test Button
-  document.getElementById('btn-force-ping').addEventListener('click', () => {
+  // Force Ping Test Button (Debug / Optional)
+  document.getElementById('btn-force-ping')?.addEventListener('click', () => {
     window.soundEngine?.playClick();
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'FORCE_PING' }));
     }
   });
 
-  // Toggle GPS vs Simulation Joystick
-  document.getElementById('btn-toggle-gps').addEventListener('click', () => {
+  // Toggle GPS vs Simulation Joystick (Debug / Optional)
+  document.getElementById('btn-toggle-gps')?.addEventListener('click', () => {
     useSimulationGps = !useSimulationGps;
     const gpsLabel = document.getElementById('gps-btn-label');
     if (gpsLabel) gpsLabel.textContent = useSimulationGps ? 'Sim' : 'GPS';

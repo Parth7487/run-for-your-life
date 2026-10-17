@@ -80,8 +80,10 @@
   --font-mono: 'Space Mono', monospace;
 
   /* Layout & Insets */
-  --safe-top: env(safe-area-inset-top, 0px);
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-top: max(env(safe-area-inset-top, 0px), 16px);
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), 16px);
+  --safe-left: max(env(safe-area-inset-left, 0px), 14px);
+  --safe-right: max(env(safe-area-inset-right, 0px), 14px);
   --pop: cubic-bezier(.34, 1.56, .64, 1);
 }
 
@@ -162,9 +164,11 @@ body::before {
   width: 100%;
   max-width: 520px;
   margin: 0 auto;
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
   min-height: 100dvh;
   position: relative;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   background: var(--obsidian);
@@ -180,8 +184,11 @@ body::before {
   flex-direction: column;
   flex: 1;
   width: 100%;
+  height: 100%;
   animation: fadeInScreen 0.25s var(--pop);
   padding: calc(var(--safe-top) + 20px) 20px calc(var(--safe-bottom) + 24px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .screen.active {
@@ -969,6 +976,12 @@ body::before {
   padding: 0;
   position: absolute;
   inset: 0;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+  touch-action: none;
 }
 
 .game-hud-header {
@@ -977,12 +990,83 @@ body::before {
   left: 0;
   right: 0;
   z-index: 1000;
-  padding: calc(var(--safe-top) + 14px) 16px 12px;
-  background: linear-gradient(180deg, rgba(21, 20, 19, 0.96) 0%, rgba(21, 20, 19, 0.8) 75%, transparent 100%);
+  padding-top: max(calc(env(safe-area-inset-top, 0px) + 8px), 54px);
+  padding-left: max(env(safe-area-inset-left, 0px), 14px);
+  padding-right: max(env(safe-area-inset-right, 0px), 14px);
+  padding-bottom: 12px;
+  background: linear-gradient(180deg, rgba(21, 20, 19, 0.98) 0%, rgba(21, 20, 19, 0.85) 60%, transparent 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.hud-top-bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  pointer-events: none;
+  width: 100%;
+}
+
+.hud-role-clock-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(33, 31, 30, 0.92);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(249, 232, 172, 0.22);
+  border-radius: 9999px;
+  padding: 6px 14px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.55);
+  pointer-events: auto;
+}
+
+.hud-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  pointer-events: auto;
+}
+
+.hud-actions-group .icon-btn-hud {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: 10px;
+  background: rgba(33, 31, 30, 0.9);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(249, 232, 172, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
+}
+
+.hud-telemetry-row {
+  pointer-events: auto;
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(28, 26, 25, 0.92);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(249, 232, 172, 0.18);
+  border-radius: 999px;
+  padding: 4px 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.hud-telemetry-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hud-telemetry-divider {
+  width: 1px;
+  height: 12px;
+  background: rgba(249, 232, 172, 0.22);
 }
 
 .hud-pill {
@@ -1003,12 +1087,6 @@ body::before {
   font-weight: 700;
 }
 
-.hud-ping-timer {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-}
-
 .hud-ping-label {
   font-size: 9px;
   font-family: var(--font-mono);
@@ -1019,7 +1097,7 @@ body::before {
 
 .hud-ping-val {
   font-family: var(--font-mono);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--crimson);
 }
@@ -1030,22 +1108,28 @@ body::before {
   left: 0;
   right: 0;
   z-index: 1000;
-  padding: 14px 16px calc(var(--safe-bottom) + 16px);
+  padding-top: 14px;
+  padding-left: max(env(safe-area-inset-left, 0px), 16px);
+  padding-right: max(env(safe-area-inset-right, 0px), 16px);
+  padding-bottom: max(calc(env(safe-area-inset-bottom, 0px) + 12px), 24px);
   background: linear-gradient(0deg, rgba(21, 20, 19, 0.98) 0%, rgba(21, 20, 19, 0.85) 75%, transparent 100%);
   display: flex;
   flex-direction: column;
   gap: 10px;
+  pointer-events: none;
 }
 
 .game-status-sheet {
   background: rgba(33, 31, 30, 0.94);
   backdrop-filter: blur(16px);
-  border: 1px solid var(--parchment-dim);
+  border: 1px solid rgba(249, 232, 172, 0.2);
   border-radius: 16px;
   padding: 12px 18px;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  pointer-events: auto;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
 }
 
 .status-stat-group {
@@ -1064,15 +1148,26 @@ body::before {
 
 .status-stat-value {
   font-family: var(--font-display);
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 800;
   letter-spacing: 0.04em;
   color: var(--parchment);
 }
 
+.status-live-beacon {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: #22c55e;
+  letter-spacing: 0.12em;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
 .btn-tag-action {
   height: 52px;
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--crimson);
   border: 1px solid var(--parchment);
   color: var(--parchment);
@@ -1082,6 +1177,11 @@ body::before {
   text-transform: uppercase;
   font-size: 14px;
   box-shadow: 0 8px 24px var(--crimson-glow);
+  pointer-events: auto;
+}
+
+#btn-runner-tagged-action {
+  pointer-events: auto;
 }
 
 /* 11. Virtual Joystick & Overlays */
@@ -1397,22 +1497,26 @@ body::before {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 400px;
-  max-height: 82vh;
+  height: min(440px, 72vh);
   background: rgba(21, 20, 19, 0.98);
-  backdrop-filter: blur(16px);
-  border-top: 1px solid var(--parchment);
-  z-index: 2200;
+  backdrop-filter: blur(20px);
+  border-top: 1.5px solid var(--parchment);
+  z-index: 2500;
   display: flex;
   flex-direction: column;
-  transform: translateY(105%);
-  transition: transform 0.32s var(--pop);
-  border-radius: 18px 18px 0 0;
-  box-shadow: 0 -10px 40px rgba(0,0,0,0.9);
+  transform: translateY(100%);
+  visibility: hidden;
+  pointer-events: none;
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.28s;
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.9);
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 14px);
 }
 
 .chat-drawer.open {
   transform: translateY(0);
+  visibility: visible;
+  pointer-events: auto;
 }
 
 .chat-drawer-header {
