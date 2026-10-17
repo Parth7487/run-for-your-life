@@ -436,7 +436,8 @@
           hasLocationPermission = true;
           useSimulationGps = false;
           myPosition = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          document.getElementById('btn-toggle-gps').textContent = '🛰️ GPS';
+          const gpsLabel = document.getElementById('gps-btn-label');
+          if (gpsLabel) gpsLabel.textContent = 'GPS';
           document.getElementById('joystick').style.display = 'none';
 
           if (setupMap) setupMap.setView([myPosition.lat, myPosition.lng], 16);
@@ -449,7 +450,8 @@
           console.warn('GPS permission denied or unavailable:', err);
           hasLocationPermission = true;
           useSimulationGps = true;
-          document.getElementById('btn-toggle-gps').textContent = '🕹️ Sim';
+          const gpsLabel = document.getElementById('gps-btn-label');
+          if (gpsLabel) gpsLabel.textContent = 'Sim';
           document.getElementById('joystick').style.display = 'flex';
           alert('GPS permission not granted. Switched to on-screen Simulation Joystick.');
           if (pendingActionAfterPermission) {
@@ -471,7 +473,8 @@
     document.getElementById('location-permission-modal').classList.remove('active');
     hasLocationPermission = true;
     useSimulationGps = true;
-    document.getElementById('btn-toggle-gps').textContent = '🕹️ Sim';
+    const gpsLabel = document.getElementById('gps-btn-label');
+    if (gpsLabel) gpsLabel.textContent = 'Sim';
     document.getElementById('joystick').style.display = 'flex';
     if (pendingActionAfterPermission) {
       pendingActionAfterPermission();
@@ -479,10 +482,22 @@
     }
   });
 
-  // Sound Toggle
+  // Sound Toggle with Custom Vector Emoticon waves / slash
+  function updateSoundBtnVisual() {
+    const soundBtn = document.getElementById('sound-btn');
+    if (!soundBtn) return;
+    const waves = soundBtn.querySelector('.sound-waves');
+    const slash = soundBtn.querySelector('.sound-slash');
+    if (waves && slash) {
+      waves.style.display = window.soundEngine.muted ? 'none' : 'block';
+      slash.style.display = window.soundEngine.muted ? 'block' : 'none';
+    }
+    soundBtn.setAttribute('title', window.soundEngine.muted ? 'Tactical Audio: Muted' : 'Tactical Audio: Active');
+  }
+
   document.getElementById('sound-btn').addEventListener('click', () => {
     window.soundEngine.muted = !window.soundEngine.muted;
-    document.getElementById('sound-btn').textContent = window.soundEngine.muted ? '🔇' : '🔊';
+    updateSoundBtnVisual();
   });
 
   // Settings Modal (Supabase Configuration)
@@ -1262,7 +1277,8 @@
   // Toggle GPS vs Simulation Joystick
   document.getElementById('btn-toggle-gps').addEventListener('click', () => {
     useSimulationGps = !useSimulationGps;
-    document.getElementById('btn-toggle-gps').textContent = useSimulationGps ? '🕹️ Sim' : '🛰️ GPS';
+    const gpsLabel = document.getElementById('gps-btn-label');
+    if (gpsLabel) gpsLabel.textContent = useSimulationGps ? 'Sim' : 'GPS';
     document.getElementById('joystick').style.display = useSimulationGps ? 'flex' : 'none';
     if (!useSimulationGps) {
       startRealGpsTracking();
@@ -1421,7 +1437,10 @@
         btn.className = 'btn btn-secondary';
         btn.style.width = '100%';
         btn.style.textAlign = 'left';
-        btn.textContent = `🎯 Tag ${r.name}`;
+        btn.style.display = 'flex';
+        btn.style.alignItems = 'center';
+        btn.style.gap = '8px';
+        btn.innerHTML = `<svg class="custom-emoticon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="var(--crimson)"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg> <span>Tag ${r.name}</span>`;
         btn.addEventListener('click', () => {
           document.getElementById('tag-modal').classList.remove('active');
           if (ws && ws.readyState === WebSocket.OPEN) {

@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 240" width="100%" height="100%">
+  <defs>
+    <linearGradient id="fez-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ae1800"/>
+      <stop offset="60%" stop-color="#912925"/>
+      <stop offset="100%" stop-color="#5a1512"/>
+    </linearGradient>
+    <linearGradient id="stone-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#F9E8AC"/>
+      <stop offset="50%" stop-color="#d9c288"/>
+      <stop offset="100%" stop-color="#a68e54"/>
+    </linearGradient>
+    <filter id="engrave-shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000" flood-opacity="0.6"/>
+    </filter>
+  </defs>
+
+  <!-- Background Crimson Tile from Brand Kit -->
+  <rect x="4" y="4" width="192" height="232" rx="16" fill="#912925" stroke="#F9E8AC" stroke-width="2" stroke-opacity="0.3" filter="url(#engrave-shadow)"/>
+  <rect x="10" y="10" width="180" height="220" rx="12" fill="none" stroke="#6A621C" stroke-width="1" stroke-dasharray="4 3" stroke-opacity="0.5"/>
+
+  <!-- Engraved Pedestal Base -->
+  <path d="M 55 210 L 145 210 L 140 195 L 60 195 Z" fill="#6A621C"/>
+  <rect x="70" y="185" width="60" height="10" rx="2" fill="#151413"/>
+
+  <!-- Neck & Torso Collar -->
+  <path d="M 76 155 L 70 185 L 130 185 L 124 155 Z" fill="url(#stone-grad)" stroke="#151413" stroke-width="2"/>
+  <path d="M 85 165 L 100 178 L 115 165" fill="none" stroke="#912925" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Carved Stone Head & Jaw -->
+  <path d="M 68 85 C 68 65 80 62 100 62 C 120 62 132 65 132 85 C 132 105 130 145 118 155 C 108 162 92 162 82 155 C 70 145 68 105 68 85 Z" fill="url(#stone-grad)" stroke="#151413" stroke-width="3"/>
+
+  <!-- Chiseled Facial Shadows & Contours -->
+  <path d="M 82 92 L 94 92" stroke="#151413" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M 106 92 L 118 92" stroke="#151413" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Eyes -->
+  <circle cx="88" cy="98" r="2.5" fill="#151413"/>
+  <circle cx="112" cy="98" r="2.5" fill="#151413"/>
+  <!-- Nose bridge -->
+  <path d="M 100 90 L 98 116 L 104 116" fill="none" stroke="#151413" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Iconic Curled Mustache from Brand Kit -->
+  <path d="M 100 124 C 92 120 75 120 72 130 C 70 136 78 138 84 134 C 92 128 98 126 100 128 C 102 126 108 128 116 134 C 122 138 130 136 128 130 C 125 120 108 120 100 124 Z" fill="#151413" stroke="#6A621C" stroke-width="1"/>
+
+  <!-- Lips & Chin Notch -->
+  <path d="M 94 142 Q 100 144 106 142" stroke="#151413" stroke-width="2" stroke-linecap="round"/>
+  <line x1="97" y1="150" x2="103" y2="150" stroke="#151413" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- The Iconic Red Fez / Tarboosh Hat -->
+  <path d="M 64 68 L 74 22 L 126 22 L 136 68 Z" fill="url(#fez-grad)" stroke="#151413" stroke-width="3"/>
+  <!-- Fez rim band -->
+  <path d="M 64 68 Q 100 76 136 68" stroke="#6A621C" stroke-width="3" fill="none"/>
+  <!-- Fez Tassel Button & String -->
+  <circle cx="100" cy="22" r="4.5" fill="#151413"/>
+  <path d="M 100 22 C 118 20 126 34 130 46" fill="none" stroke="#151413" stroke-width="2" stroke-linecap="round"/>
+  <polygon points="127,46 133,46 135,62 125,62" fill="#151413"/>
+
+  <!-- "JDID" Brandmark / Tactical Cipher Stamp at bottom -->
+  <text x="100" y="228" font-family="'Courier New', monospace" font-size="9" font-weight="900" fill="#F9E8AC" text-anchor="middle" letter-spacing="3">TACTICAL NOIR</text>
+</svg>
