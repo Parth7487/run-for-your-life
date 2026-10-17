@@ -9,9 +9,9 @@ class SupabaseGameManager {
     this.playerId = null;
     this.isOnline = false;
 
-    // Default configuration (can be updated via UI or localStorage)
-    this.supabaseUrl = localStorage.getItem('RFYL_SUPABASE_URL') || 'https://ifnuaowvdobmlsmwpftk.supabase.co';
-    this.supabaseAnonKey = localStorage.getItem('RFYL_SUPABASE_KEY') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlmbnVhb3d2ZG9ibWxzbXdwZnRrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxNDc1MzMsImV4cCI6MjEwNTcyMzUzM30.GNvZbrS49suJVTCKW4inoJvu6rMR1C0CPCjOfvyM3mo';
+    // Live Supabase project configuration (Parth7487's Project)
+    this.supabaseUrl = localStorage.getItem('RFYL_SUPABASE_URL') || 'https://ceyhsgzoouysumwfgqee.supabase.co';
+    this.supabaseAnonKey = localStorage.getItem('RFYL_SUPABASE_KEY') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNleWhzZ3pvb3V5c3Vtd2ZncWVlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIyNDI0ODUsImV4cCI6MjEwNzgxODQ4NX0.zFFxqgxtCSD0tcTUBUkNavkzyz_7VoRWL7WkwryyI0U';
     
     this.initClient();
   }
