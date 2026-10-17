@@ -1378,6 +1378,324 @@
     }
   });
 
+  // =========================================================
+  // INTERACTIVE ASCII TACTICAL RADAR & CRT TERMINAL ENGINE
+  // =========================================================
+  let asciiSweepAngle = 0;
+  let asciiRadarInterval = null;
+  let asciiRunnerInterval = null;
+  let asciiShockwaveRadius = -1; // -1 means inactive
+  let isAsciiModalOpen = false;
+  let sprintBoostFrames = 0;
+
+  // Multi-frame ASCII Runner Animation
+  const asciiRunnerFrames = [
+    [
+      "        __O      >> RUN FOR YOUR LIFE >>",
+      "       / /\\_,    ZONE: PERIMETER SECURE",
+      "     _/\\/_       STATUS: HUNTER IN PURSUIT",
+      "        /  \\     RADAR: 360° SATELLITE ACTIVE"
+    ].join("\n"),
+    [
+      "         _O      >> RUN FOR YOUR LIFE >>",
+      "       /\\_/\\     ZONE: PERIMETER SECURE",
+      "      /  \\       STATUS: ACCELERATING SPRINT",
+      "        _/\\_     RADAR: 360° SATELLITE ACTIVE"
+    ].join("\n"),
+    [
+      "         O__     >> RUN FOR YOUR LIFE >>",
+      "        /  /\\_   ZONE: PERIMETER SECURE",
+      "       /  /  \\   STATUS: EVADING ENEMY SONAR",
+      "      / _/    \\  RADAR: 360° SATELLITE ACTIVE"
+    ].join("\n"),
+    [
+      "          o      >> RUN FOR YOUR LIFE >>",
+      "        </ \\>    ZONE: PERIMETER SECURE",
+      "        /   \\    STATUS: PING BURST DETECTED",
+      "       _>   <_   RADAR: 360° SATELLITE ACTIVE"
+    ].join("\n")
+  ];
+
+  let currentRunnerFrameIdx = 0;
+  function updateAsciiRunner() {
+    currentRunnerFrameIdx = (currentRunnerFrameIdx + 1) % asciiRunnerFrames.length;
+    const bannerEl = document.getElementById('ascii-runner-banner');
+    const landingEl = document.getElementById('landing-ascii-runner');
+    const frame = asciiRunnerFrames[currentRunnerFrameIdx];
+
+    if (bannerEl) bannerEl.textContent = frame;
+    if (landingEl) landingEl.textContent = frame;
+
+    if (sprintBoostFrames > 0) {
+      sprintBoostFrames--;
+    }
+  }
+
+  // Generate 19x19 ASCII Circular Radar Grid
+  function renderAsciiRadar() {
+    const radarEl = document.getElementById('ascii-radar-display');
+    if (!radarEl) return;
+
+    const size = 19;
+    const center = Math.floor(size / 2); // 9
+    const maxRadius = center - 0.5; // ~8.5
+
+    // Initialize blank grid
+    const grid = [];
+    for (let r = 0; r < size; r++) {
+      grid[r] = [];
+      for (let c = 0; c < size; c++) {
+        grid[r][c] = ' ';
+      }
+    }
+
+    // Draw range rings
+    const ringRadii = [3, 6, 8.5];
+    for (let r = 0; r < size; r++) {
+      for (let c = 0; c < size; c++) {
+        const dx = c - center;
+        const dy = (r - center) * 1.0;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        for (const radius of ringRadii) {
+          if (Math.abs(dist - radius) < 0.5) {
+            grid[r][c] = (radius === 8.5) ? '·' : '.';
+          }
+        }
+
+        // Crosshairs
+        if (dist <= maxRadius) {
+          if (r === center && Math.abs(c - center) % 3 === 0 && grid[r][c] === ' ') grid[r][c] = '-';
+          if (c === center && Math.abs(r - center) % 2 === 0 && grid[r][c] === ' ') grid[r][c] = '|';
+        }
+      }
+    }
+
+    // Draw rotating sweep ray
+    const sweepRad = (asciiSweepAngle * Math.PI) / 180;
+    const sweepRayLength = 8.5;
+    for (let d = 1; d <= sweepRayLength; d += 0.8) {
+      const sx = Math.round(center + Math.cos(sweepRad) * d);
+      const sy = Math.round(center + Math.sin(sweepRad) * d);
+      if (sx >= 0 && sx < size && sy >= 0 && sy < size) {
+        const modDeg = ((asciiSweepAngle % 180) + 180) % 180;
+        let beamChar = '*';
+        if (modDeg >= 25 && modDeg < 65) beamChar = '\\';
+        else if (modDeg >= 65 && modDeg < 115) beamChar = '|';
+        else if (modDeg >= 115 && modDeg < 155) beamChar = '/';
+        else beamChar = '-';
+
+        grid[sy][sx] = beamChar;
+      }
+    }
+
+    // Draw expanding sonar shockwave if active
+    if (asciiShockwaveRadius >= 0 && asciiShockwaveRadius <= 9) {
+      for (let r = 0; r < size; r++) {
+        for (let c = 0; c < size; c++) {
+          const dx = c - center;
+          const dy = r - center;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (Math.abs(dist - asciiShockwaveRadius) < 0.6) {
+            grid[r][c] = '~';
+          }
+        }
+      }
+      asciiShockwaveRadius += 0.7;
+      if (asciiShockwaveRadius > 9) asciiShockwaveRadius = -1;
+    }
+
+    // Plot other operatives from active room
+    let targetsInRange = 0;
+    const players = currentRoomData?.players || [];
+    players.forEach((p) => {
+      if (p.id === myPlayerId) return;
+      if (p.lat && p.lng) {
+        const dLat = (p.lat - myPosition.lat) * 111000;
+        const dLng = (p.lng - myPosition.lng) * 111000 * Math.cos((myPosition.lat * Math.PI) / 180);
+        const distMeters = Math.hypot(dLat, dLng);
+        const maxDisplayMeters = currentRoomData?.config?.arena?.radius || 300;
+
+        if (distMeters <= maxDisplayMeters) {
+          targetsInRange++;
+          const normDist = (distMeters / maxDisplayMeters) * (center - 1);
+          const angle = Math.atan2(dLat, dLng);
+          const tx = Math.round(center + Math.cos(angle) * normDist);
+          const ty = Math.round(center - Math.sin(angle) * normDist);
+          if (tx >= 0 && tx < size && ty >= 0 && ty < size) {
+            grid[ty][tx] = p.assignedRole === 'hunter' ? '▲' : '●';
+          }
+        }
+      }
+    });
+
+    if (targetsInRange === 0) {
+      targetsInRange = 1;
+      grid[center - 3][center + 4] = '●';
+      grid[center + 2][center - 3] = '▲';
+    }
+
+    // Center player
+    grid[center][center] = '@';
+
+    // Format grid to text
+    const textLines = grid.map((row) => row.join(' ')).join('\n');
+    radarEl.textContent = textLines;
+
+    // Update Telemetry Panel
+    const opNameEl = document.getElementById('ascii-op-name');
+    const opRoleEl = document.getElementById('ascii-op-role');
+    const opCoordsEl = document.getElementById('ascii-op-coords');
+    const sweepDegEl = document.getElementById('ascii-radar-sweep-deg');
+    const targetsCountEl = document.getElementById('ascii-targets-count');
+
+    if (opNameEl) opNameEl.textContent = (document.getElementById('player-name-input')?.value.trim() || 'GHOST').toUpperCase();
+    if (opRoleEl) opRoleEl.textContent = (myAssignedRole || currentRole || 'OPERATIVE').toUpperCase();
+    if (opCoordsEl) opCoordsEl.textContent = `${myPosition.lat.toFixed(4)}° N, ${Math.abs(myPosition.lng).toFixed(4)}° W`;
+    if (sweepDegEl) sweepDegEl.textContent = `${Math.floor(asciiSweepAngle)}°`;
+    if (targetsCountEl) targetsCountEl.textContent = `${targetsInRange} TARGETS IN ARENA`;
+
+    // Increment sweep angle
+    asciiSweepAngle = (asciiSweepAngle + 12) % 360;
+  }
+
+  // Interactive Terminal Command Interpreter
+  function executeAsciiCommand(cmdStr) {
+    const raw = cmdStr.trim().toLowerCase();
+    if (!raw) return;
+
+    logAscii(`> ${cmdStr}`, 'cmd');
+    window.soundEngine?.playClick();
+
+    if (raw === 'help') {
+      logAscii('AVAILABLE TACTICAL COMMANDS:');
+      logAscii('  scan   - 360° radar sweep & calculate target ranges in meters');
+      logAscii('  ping   - Emit high-frequency microwave sonar shockwave');
+      logAscii('  sprint - Trigger 3x operative adrenaline sprint animation');
+      logAscii('  status - Print live satellite telemetry & room credentials');
+      logAscii('  matrix - Toggle digital rain telemetry mode');
+      logAscii('  clear  - Clear terminal screen log');
+    } else if (raw === 'scan') {
+      logAscii('[SCAN] Initiating 360° microwave phased-array sweep...', 'sys');
+      window.soundEngine?.playPing();
+      asciiShockwaveRadius = 0;
+
+      const players = currentRoomData?.players || [];
+      const others = players.filter((p) => p.id !== myPlayerId);
+
+      if (others.length === 0) {
+        logAscii('  > TARGET [RUNNER-01]: 142m BEARING 054° NE [ECHO RETURN STRONG]');
+        logAscii('  > TARGET [HUNTER-02]: 86m  BEARING 220° SW [VELOCITY: 3.4 m/s]');
+      } else {
+        others.forEach((p) => {
+          if (p.lat && p.lng) {
+            const dist = Math.round(haversine(myPosition.lat, myPosition.lng, p.lat, p.lng));
+            const role = (p.assignedRole || p.rolePreference || 'unknown').toUpperCase();
+            logAscii(`  > ${p.name.toUpperCase()} (${role}): ${dist}m away [TRACKED]`);
+          } else {
+            logAscii(`  > ${p.name.toUpperCase()}: Signal acquired, triangulating GPS...`);
+          }
+        });
+      }
+    } else if (raw === 'ping') {
+      logAscii('[SONAR] Sonar burst emitted. Sweeping all operatives in zone.', 'sys');
+      window.soundEngine?.playPing();
+      asciiShockwaveRadius = 0;
+    } else if (raw === 'sprint') {
+      sprintBoostFrames = 25;
+      logAscii('[SPRINT] Adrenaline overdrive activated! Sprite speed: 300%.', 'sys');
+      window.soundEngine?.playHeartbeat?.(true);
+    } else if (raw === 'status') {
+      const room = myRoomCode || 'OFFLINE';
+      const name = document.getElementById('player-name-input')?.value.trim() || 'Operative';
+      const role = (myAssignedRole || currentRole).toUpperCase();
+      logAscii(`[TELEMETRY] ROOM: ${room} | OPERATIVE: ${name.toUpperCase()} | ROLE: ${role}`);
+      logAscii(`[GPS] LAT: ${myPosition.lat.toFixed(6)} | LNG: ${myPosition.lng.toFixed(6)} | SATELLITES: 12 LOCK`);
+      logAscii(`[BUFFER] 90s DISCONNECT GRACE PERIOD: ARMED & READY`);
+    } else if (raw === 'clear') {
+      const logEl = document.getElementById('ascii-terminal-log');
+      if (logEl) logEl.innerHTML = '<div class="log-line sys">-- TERMINAL SCREEN CLEARED --</div>';
+    } else if (raw === 'matrix') {
+      logAscii('01010010 01010101 01001110 00100000 01000110 01001111 01010010', 'sys');
+      logAscii('01011001 01001111 01010101 01010010 00100000 01001100 01001001', 'sys');
+      logAscii('RUN FOR YOUR LIFE // SYSTEM MATRIX ONLINE', 'sys');
+    } else {
+      logAscii(`[ERROR] Unknown command: "${raw}". Type "help" for tactical commands.`, 'err');
+    }
+  }
+
+  function logAscii(text, type = 'log') {
+    const logEl = document.getElementById('ascii-terminal-log');
+    if (!logEl) return;
+    const line = document.createElement('div');
+    line.className = `log-line ${type}`;
+    line.textContent = text;
+    logEl.appendChild(line);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  // Open & Close ASCII Terminal Modal
+  function openAsciiTerminal() {
+    window.soundEngine?.playClick();
+    isAsciiModalOpen = true;
+    const modal = document.getElementById('ascii-terminal-modal');
+    if (modal) modal.classList.add('active');
+
+    if (!asciiRadarInterval) {
+      asciiRadarInterval = setInterval(renderAsciiRadar, 70);
+    }
+    const input = document.getElementById('ascii-cmd-input');
+    if (input) setTimeout(() => input.focus(), 150);
+  }
+
+  function closeAsciiTerminal() {
+    isAsciiModalOpen = false;
+    const modal = document.getElementById('ascii-terminal-modal');
+    if (modal) modal.classList.remove('active');
+  }
+
+  // Event Listeners for ASCII Terminal
+  document.getElementById('btn-open-ascii-terminal')?.addEventListener('click', openAsciiTerminal);
+  document.getElementById('btn-hud-ascii')?.addEventListener('click', openAsciiTerminal);
+  document.getElementById('ascii-hero-widget')?.addEventListener('click', openAsciiTerminal);
+  document.getElementById('btn-close-ascii')?.addEventListener('click', closeAsciiTerminal);
+
+  document.getElementById('ascii-terminal-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'ascii-terminal-modal') closeAsciiTerminal();
+  });
+
+  // ASCII Command Input
+  const asciiInput = document.getElementById('ascii-cmd-input');
+  const asciiExecBtn = document.getElementById('btn-exec-ascii-cmd');
+
+  function handleAsciiInputSubmit() {
+    if (!asciiInput) return;
+    const val = asciiInput.value;
+    if (val.trim()) {
+      executeAsciiCommand(val);
+      asciiInput.value = '';
+    }
+  }
+
+  if (asciiExecBtn) asciiExecBtn.addEventListener('click', handleAsciiInputSubmit);
+  if (asciiInput) {
+    asciiInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') handleAsciiInputSubmit();
+    });
+  }
+
+  // Quick Action Chips
+  document.querySelectorAll('.ascii-chip').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      const cmd = chip.dataset.cmd;
+      if (cmd) executeAsciiCommand(cmd);
+    });
+  });
+
+  // Start ASCII Runner Loop (Runs continuously for landing widget and modal)
+  asciiRunnerInterval = setInterval(updateAsciiRunner, 190);
+  renderAsciiRadar();
+
   // Utilities
   function haversine(lat1, lon1, lat2, lon2) {
     const R = 6371e3;

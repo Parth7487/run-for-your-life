@@ -1412,3 +1412,331 @@ body::before {
   0% { box-shadow: 0 0 6px rgba(249, 232, 172, 0.1); }
   100% { box-shadow: 0 0 16px rgba(249, 232, 172, 0.35); }
 }
+
+/* =========================================================
+   ASCII TACTICAL RADAR & CRT TERMINAL DESIGN
+   ========================================================= */
+
+.ascii-hero-widget {
+  background: #0d0f0d;
+  border: 1px solid rgba(74, 222, 128, 0.35);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 20px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45), 0 0 12px rgba(74, 222, 128, 0.12);
+}
+
+.ascii-hero-widget:hover {
+  border-color: #4ade80;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55), 0 0 20px rgba(74, 222, 128, 0.25);
+  transform: translateY(-2px);
+}
+
+.ascii-widget-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.ascii-widget-tag {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: #4ade80;
+  letter-spacing: 0.12em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pulse-green-dot {
+  width: 7px;
+  height: 7px;
+  background: #4ade80;
+  border-radius: 50%;
+  box-shadow: 0 0 8px #4ade80;
+  animation: blinkWarning 0.8s infinite alternate;
+}
+
+.ascii-widget-action {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--parchment);
+  background: rgba(249, 232, 172, 0.12);
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(249, 232, 172, 0.3);
+}
+
+.landing-ascii-display {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.25;
+  color: #86efac;
+  text-shadow: 0 0 6px rgba(74, 222, 128, 0.5);
+  margin: 0;
+  white-space: pre;
+  overflow-x: auto;
+}
+
+/* ASCII Terminal Modal Box */
+.ascii-terminal-box {
+  width: 95vw;
+  max-width: 680px;
+  max-height: 90vh;
+  background: #090a09;
+  border: 1.5px solid rgba(74, 222, 128, 0.45);
+  border-radius: 14px;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.85), 0 0 25px rgba(74, 222, 128, 0.2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+.ascii-terminal-header {
+  background: #111411;
+  padding: 10px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(74, 222, 128, 0.3);
+}
+
+.crt-led-dot {
+  width: 8px;
+  height: 8px;
+  background: #22c55e;
+  border-radius: 50%;
+  box-shadow: 0 0 10px #22c55e;
+  animation: blinkWarning 1s infinite alternate;
+}
+
+.ascii-title {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 800;
+  color: #4ade80;
+  letter-spacing: 0.15em;
+  text-shadow: 0 0 6px rgba(74, 222, 128, 0.6);
+}
+
+/* CRT Screen Interior with Scanlines */
+.crt-screen {
+  position: relative;
+  background: #050705;
+  padding: 14px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.crt-scanlines {
+  pointer-events: none;
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.25),
+    rgba(0, 0, 0, 0.25) 1px,
+    transparent 1px,
+    transparent 2px
+  );
+  z-index: 10;
+}
+
+.crt-glow-overlay {
+  pointer-events: none;
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: radial-gradient(circle at center, transparent 65%, rgba(0, 0, 0, 0.65) 100%);
+  z-index: 11;
+}
+
+.ascii-runner-text {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--parchment);
+  text-shadow: 0 0 6px rgba(249, 232, 172, 0.6);
+  white-space: pre;
+  margin: 0;
+  text-align: center;
+  padding: 6px 0;
+  border-bottom: 1px dashed rgba(74, 222, 128, 0.25);
+}
+
+/* ASCII Radar Container */
+.ascii-radar-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+@media (min-width: 580px) {
+  .ascii-radar-container {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: center;
+  }
+}
+
+.ascii-radar-matrix {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.15;
+  color: #4ade80;
+  text-shadow: 0 0 8px rgba(74, 222, 128, 0.7);
+  white-space: pre;
+  background: #030503;
+  border: 1px solid rgba(74, 222, 128, 0.35);
+  border-radius: 8px;
+  padding: 10px;
+  margin: 0;
+  letter-spacing: 0.1em;
+  user-select: text;
+}
+
+.ascii-telemetry-panel {
+  background: rgba(13, 20, 13, 0.6);
+  border: 1px solid rgba(74, 222, 128, 0.25);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #86efac;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 190px;
+}
+
+.telemetry-row {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px dotted rgba(74, 222, 128, 0.15);
+  padding-bottom: 4px;
+}
+
+.telemetry-row span {
+  color: rgba(134, 239, 172, 0.7);
+}
+
+.telemetry-row b {
+  color: var(--parchment);
+}
+
+/* Terminal Log Window */
+.ascii-log-window {
+  background: #020402;
+  border: 1px solid rgba(74, 222, 128, 0.2);
+  border-radius: 8px;
+  padding: 8px 12px;
+  max-height: 100px;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.log-line {
+  color: #86efac;
+}
+
+.log-line.sys {
+  color: #a3e635;
+}
+
+.log-line.cmd {
+  color: var(--parchment);
+}
+
+.log-line.err {
+  color: #f87171;
+}
+
+/* Quick Command Chips */
+.ascii-quick-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ascii-chip {
+  background: rgba(74, 222, 128, 0.1);
+  border: 1px solid rgba(74, 222, 128, 0.35);
+  border-radius: 6px;
+  color: #86efac;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ascii-chip:hover, .ascii-chip:active {
+  background: rgba(74, 222, 128, 0.3);
+  color: #fff;
+  border-color: #4ade80;
+  transform: translateY(-1px);
+}
+
+/* ASCII Command Bar */
+.ascii-cmd-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #0d120d;
+  border: 1px solid rgba(74, 222, 128, 0.4);
+  border-radius: 8px;
+  padding: 6px 12px;
+}
+
+.ascii-prompt {
+  font-family: var(--font-mono);
+  color: #4ade80;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.ascii-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: #fff;
+  caret-color: #4ade80;
+}
+
+.ascii-send-btn {
+  background: #15803d;
+  border: 1px solid #4ade80;
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.ascii-send-btn:hover {
+  background: #16a34a;
+}
+
