@@ -69,6 +69,7 @@
         </div>
       </div>
       <div class="header-actions">
+        <button id="btn-open-tutorial" class="icon-button" title="How to Play & Game Rules">📖</button>
         <button id="btn-open-ascii-terminal" class="icon-button" title="Interactive ASCII Tactical Radar">📟</button>
         <button id="btn-open-settings" class="icon-button" title="Supabase Database Settings">⚙️</button>
         <button id="sound-btn" class="icon-button" title="Toggle Sound">🔊</button>
@@ -117,6 +118,17 @@
         <span class="card-desc">Enter 6-letter room code (or reconnect automatically within 90-sec grace buffer).</span>
       </button>
     </div>
+
+    <!-- Interactive Animated Tutorial & Rules Card -->
+    <button id="btn-open-tutorial-card" class="action-card tutorial-action-card">
+      <div class="card-header-row">
+        <span class="card-title" style="display: flex; align-items: center; gap: 8px;">
+          <span>📖</span> How to Play & Rules
+        </span>
+        <span class="tutorial-badge-pulse">ANIMATED TUTORIAL</span>
+      </div>
+      <span class="card-desc">Interactive visual walkthrough of the hunting radar, scatter phase, geofence, and 1v1 duel rules.</span>
+    </button>
 
     <footer class="app-footer">
       <p class="footer-credit">Designed and developed by <b>Shopifydevstudio</b></p>
@@ -365,6 +377,10 @@
         <button id="btn-hud-ascii" class="hud-pill icon-btn-hud" title="Tactical ASCII Radar">
           📟
         </button>
+
+        <button id="btn-hud-help" class="hud-pill icon-btn-hud" title="Rules & Tutorial">
+          📖
+        </button>
       </div>
     </div>
 
@@ -522,6 +538,230 @@
           <button id="btn-exec-ascii-cmd" class="ascii-send-btn">EXEC</button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Interactive Animated Tutorial & Official Rulebook -->
+  <div id="tutorial-modal" class="modal-overlay" style="z-index: 3600;">
+    <div class="tutorial-modal-box">
+      
+      <!-- Modal Header with Tab Switcher -->
+      <div class="tutorial-header">
+        <div class="tutorial-tabs">
+          <button id="tab-btn-tutorial" class="tutorial-tab active">🎬 Animated Tutorial</button>
+          <button id="tab-btn-rules" class="tutorial-tab">📜 Official Rules</button>
+        </div>
+        <button id="btn-close-tutorial" class="icon-button" style="width: 32px; height: 32px; font-size: 14px;">✕</button>
+      </div>
+
+      <!-- TAB 1: Animated Interactive Walkthrough -->
+      <div id="tutorial-content-walkthrough" class="tutorial-tab-body active">
+        
+        <!-- Stage Steps Navigation Chips -->
+        <div class="tutorial-step-chips">
+          <button class="step-chip active" data-step="0">1. Arena Zone</button>
+          <button class="step-chip" data-step="1">2. 1v1 & Roles</button>
+          <button class="step-chip" data-step="2">3. Scatter 03:00</button>
+          <button class="step-chip" data-step="3">4. Radar Pings</button>
+          <button class="step-chip" data-step="4">5. Physical Tag</button>
+        </div>
+
+        <!-- Dynamic Animated Stage Visualizer Viewport -->
+        <div class="tutorial-stage-viewport">
+          
+          <!-- STAGE 0: The Arena Geofence -->
+          <div class="tutorial-stage active" id="tutorial-stage-0">
+            <div class="stage-visualizer-box">
+              <div class="anim-geofence-container">
+                <div class="anim-geofence-circle">
+                  <div class="anim-geofence-pulse"></div>
+                  <div class="anim-runner-dot">🏃</div>
+                  <div class="anim-perimeter-label">350m GEOFENCE PERIMETER</div>
+                </div>
+              </div>
+            </div>
+            <div class="stage-info">
+              <span class="stage-badge">STAGE 1 OF 5 • ARENA BOUNDARY</span>
+              <h3 class="stage-title">Drop the Geofence Zone</h3>
+              <p class="stage-desc">
+                The Host drops a circular boundary over your local park, campus, or neighborhood (from 100m up to 2500m).
+                <br><b>Crucial Rule:</b> All operatives must remain inside the boundary circle. If a runner steps out of bounds, their phone flashes red and an alarm sounds!
+              </p>
+              <div class="stage-interactive-action">
+                <button id="btn-sim-breach" class="btn btn-secondary" style="font-size: 12px; padding: 6px 14px;">⚠️ Test Out-of-Bounds Siren</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- STAGE 1: 1v1 Duel or Squad Roles -->
+          <div class="tutorial-stage" id="tutorial-stage-1">
+            <div class="stage-visualizer-box">
+              <div class="anim-roles-duo">
+                <div class="anim-role-card hunter">
+                  <span class="anim-icon">🎯</span>
+                  <b>HUNTER</b>
+                  <p>Search & Chase</p>
+                </div>
+                <div class="anim-vs-badge">VS</div>
+                <div class="anim-role-card runner">
+                  <span class="anim-icon">🏃</span>
+                  <b>RUNNER</b>
+                  <p>Hide & Survive</p>
+                </div>
+              </div>
+            </div>
+            <div class="stage-info">
+              <span class="stage-badge">STAGE 2 OF 5 • MATCH DYNAMICS</span>
+              <h3 class="stage-title">1v1 Duel or Multiplayer Squads</h3>
+              <p class="stage-desc">
+                <b>2 Players?</b> The game automatically launches into an intense <b>1v1 Duel</b> (1 Hunter vs 1 Runner).<br>
+                <b>More Players?</b> The fair-play system balances teams automatically. Runners win if ANY runner survives until the round timer hits 0:00!
+              </p>
+              <div class="stage-interactive-action">
+                <button id="btn-sim-duel-toggle" class="btn btn-secondary" style="font-size: 12px; padding: 6px 14px;">⚔️ Switch 1v1 / Squad View</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- STAGE 2: Scatter Phase (3-Min Head Start) -->
+          <div class="tutorial-stage" id="tutorial-stage-2">
+            <div class="stage-visualizer-box">
+              <div class="anim-scatter-box">
+                <div class="anim-countdown-digit">03:00</div>
+                <div class="anim-scatter-status">RUNNERS SCATTERING • HUNTERS BLIND</div>
+                <div class="anim-scatter-track">
+                  <div class="anim-scatter-fill"></div>
+                </div>
+              </div>
+            </div>
+            <div class="stage-info">
+              <span class="stage-badge">STAGE 3 OF 5 • HEAD START</span>
+              <h3 class="stage-title">Runners Scatter, Hunters Wait</h3>
+              <p class="stage-desc">
+                When the match launches, Runners get an initial <b>3-minute head start</b> to sprint into the zone and find covert hiding spots.<br>
+                <b>Honor Rule:</b> Hunters must remain at the designated meeting point with eyes averted. No tracking is allowed until the countdown hits zero.
+              </p>
+              <div class="stage-interactive-action">
+                <button id="btn-sim-heartbeat" class="btn btn-secondary" style="font-size: 12px; padding: 6px 14px;">💓 Test Countdown Heartbeat</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- STAGE 3: Radar Pings & Update Frequencies -->
+          <div class="tutorial-stage" id="tutorial-stage-3">
+            <div class="stage-visualizer-box">
+              <div class="anim-radar-ping-box">
+                <div class="anim-ping-sweep"></div>
+                <div class="anim-ping-blip">● PING</div>
+                <div class="anim-radar-rings"></div>
+              </div>
+            </div>
+            <div class="stage-info">
+              <span class="stage-badge">STAGE 4 OF 5 • RADAR TRACKING</span>
+              <h3 class="stage-title">Periodic Sonar Radar Pings</h3>
+              <p class="stage-desc">
+                Runners do <b>NOT</b> broadcast live 24/7 location! Instead, their GPS coordinates flash on the hunter's radar at the chosen ping rate (<b>20s to 80s</b>).<br>
+                Between pings, hunters must follow footprints, line of sight, and tactical intuition. Runners receive an alert whenever they've been pinged!
+              </p>
+              <div class="stage-interactive-action">
+                <button id="btn-sim-sonar-ping" class="btn btn-secondary" style="font-size: 12px; padding: 6px 14px;">📡 Fire Test Sonar Ping</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- STAGE 4: Physical Tag & 90s Buffer -->
+          <div class="tutorial-stage" id="tutorial-stage-4">
+            <div class="stage-visualizer-box">
+              <div class="anim-tag-box">
+                <div class="anim-tag-pulse">🎯 IN RANGE</div>
+                <div class="anim-buffer-pill">90s DISCONNECT BUFFER ACTIVE</div>
+              </div>
+            </div>
+            <div class="stage-info">
+              <span class="stage-badge">STAGE 5 OF 5 • VICTORY & RECONNECTION</span>
+              <h3 class="stage-title">Physical Tagging & 90s Buffer</h3>
+              <p class="stage-desc">
+                <b>Tagging:</b> Hunters must physically touch the runner in person (arm's length) and tap <b>"TAG A RUNNER"</b>. Tagged runners become spectators.<br>
+                <b>90s Disconnect Buffer:</b> If a player loses connection or their phone screen sleeps, they have 90 seconds to rejoin with the same codename without losing their role!
+              </p>
+              <div class="stage-interactive-action">
+                <button id="btn-sim-tag-alert" class="btn btn-primary" style="font-size: 12px; padding: 6px 14px;">🎯 Test Tag Fanfare</button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Carousel Footer Controls -->
+        <div class="tutorial-carousel-footer">
+          <button id="btn-tutorial-prev" class="btn btn-secondary" style="width: auto; padding: 8px 18px; font-size: 13px;">← Previous</button>
+          <div class="tutorial-dots">
+            <span class="t-dot active" data-step="0"></span>
+            <span class="t-dot" data-step="1"></span>
+            <span class="t-dot" data-step="2"></span>
+            <span class="t-dot" data-step="3"></span>
+            <span class="t-dot" data-step="4"></span>
+          </div>
+          <button id="btn-tutorial-next" class="btn btn-primary" style="width: auto; padding: 8px 18px; font-size: 13px;">Next →</button>
+        </div>
+
+      </div>
+
+      <!-- TAB 2: Complete Official Rulebook -->
+      <div id="tutorial-content-rules" class="tutorial-tab-body">
+        <div class="rules-list-container">
+          
+          <div class="rule-card">
+            <div class="rule-num">RULE 01</div>
+            <div class="rule-body">
+              <h4>Strictly On Foot (No Vehicles)</h4>
+              <p>All movement must be on foot (walking, jogging, sprinting). Cars, bicycles, e-scooters, skateboards, rollerblades, and public transport are strictly forbidden. Infractions result in immediate disqualification.</p>
+            </div>
+          </div>
+
+          <div class="rule-card">
+            <div class="rule-num">RULE 02</div>
+            <div class="rule-body">
+              <h4>Perimeter Boundary Integrity</h4>
+              <p>Operatives must remain within the circular arena zone set by the host at all times. Stepping out of bounds triggers a flashing red warning and siren. Runners outside the zone for more than 30 seconds forfeit the round.</p>
+            </div>
+          </div>
+
+          <div class="rule-card">
+            <div class="rule-num">RULE 03</div>
+            <div class="rule-body">
+              <h4>Public Access & Safety First</h4>
+              <p>No trespassing on private property, construction zones, or locked buildings. Stay in public parks, sidewalks, and open outdoor spaces. Always obey pedestrian signals and watch for vehicular traffic.</p>
+            </div>
+          </div>
+
+          <div class="rule-card">
+            <div class="rule-num">RULE 04</div>
+            <div class="rule-body">
+              <h4>Gentle Physical Tagging</h4>
+              <p>A tag must be a physical touch with an arm's reach (gentle tap on shoulder, arm, or back). No tackling, grabbing, holding, or physical roughness. Once tagged, the runner confirms in-app and switches to Spectator mode.</p>
+            </div>
+          </div>
+
+          <div class="rule-card">
+            <div class="rule-num">RULE 05</div>
+            <div class="rule-body">
+              <h4>90-Second Disconnection Buffer</h4>
+              <p>If network connection drops or phone battery dies temporarily, the game holds your operative identity for 90 seconds. Simply re-open the app using the exact same codename to instantly restore your position and role.</p>
+            </div>
+          </div>
+
+          <div class="rule-card">
+            <div class="rule-num">RULE 06</div>
+            <div class="rule-body">
+              <h4>Tactical Chat & Photo Intel</h4>
+              <p>Operatives may use the built-in tactical chat to share intelligence and snap live camera photos of hiding spots or landmarks. Hunters can coordinate pincer movements, while runners can warn teammates.</p>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
     </div>
   </div>
 

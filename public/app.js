@@ -1619,6 +1619,12 @@
       logAscii('01010010 01010101 01001110 00100000 01000110 01001111 01010010', 'sys');
       logAscii('01011001 01001111 01010101 01010010 00100000 01001100 01001001', 'sys');
       logAscii('RUN FOR YOUR LIFE // SYSTEM MATRIX ONLINE', 'sys');
+    } else if (raw === 'rules') {
+      logAscii('[RULES] Opening official tactical rulebook...', 'sys');
+      openTutorialModal('rules');
+    } else if (raw === 'tutorial') {
+      logAscii('[TUTORIAL] Launching animated tactical visualizer...', 'sys');
+      openTutorialModal('tutorial');
     } else {
       logAscii(`[ERROR] Unknown command: "${raw}". Type "help" for tactical commands.`, 'err');
     }
@@ -1695,6 +1701,164 @@
   // Start ASCII Runner Loop (Runs continuously for landing widget and modal)
   asciiRunnerInterval = setInterval(updateAsciiRunner, 190);
   renderAsciiRadar();
+
+  // =========================================================
+  // INTERACTIVE ANIMATED TUTORIAL & OFFICIAL RULEBOOK
+  // =========================================================
+  let currentTutorialStep = 0;
+  const totalTutorialSteps = 5;
+
+  function openTutorialModal(initialTab = 'tutorial') {
+    window.soundEngine?.playClick();
+    const modal = document.getElementById('tutorial-modal');
+    if (!modal) return;
+    modal.classList.add('active');
+
+    if (initialTab === 'rules') {
+      switchTutorialTab('rules');
+    } else {
+      switchTutorialTab('tutorial');
+    }
+  }
+
+  function closeTutorialModal() {
+    const modal = document.getElementById('tutorial-modal');
+    if (modal) modal.classList.remove('active');
+  }
+
+  function switchTutorialTab(tabName) {
+    window.soundEngine?.playClick();
+    const btnTut = document.getElementById('tab-btn-tutorial');
+    const btnRules = document.getElementById('tab-btn-rules');
+    const bodyTut = document.getElementById('tutorial-content-walkthrough');
+    const bodyRules = document.getElementById('tutorial-content-rules');
+
+    if (tabName === 'tutorial') {
+      btnTut?.classList.add('active');
+      btnRules?.classList.remove('active');
+      bodyTut?.classList.add('active');
+      bodyRules?.classList.remove('active');
+    } else {
+      btnTut?.classList.remove('active');
+      btnRules?.classList.add('active');
+      bodyTut?.classList.remove('active');
+      bodyRules?.classList.add('active');
+    }
+  }
+
+  function goToTutorialStep(stepIndex) {
+    if (stepIndex < 0 || stepIndex >= totalTutorialSteps) return;
+    window.soundEngine?.playClick();
+    currentTutorialStep = stepIndex;
+
+    // Update active stage slide
+    document.querySelectorAll('.tutorial-stage').forEach((st, idx) => {
+      st.classList.toggle('active', idx === currentTutorialStep);
+    });
+
+    // Update step chips
+    document.querySelectorAll('.step-chip').forEach((chip) => {
+      const chipStep = parseInt(chip.dataset.step, 10);
+      chip.classList.toggle('active', chipStep === currentTutorialStep);
+    });
+
+    // Update dots
+    document.querySelectorAll('.t-dot').forEach((dot) => {
+      const dotStep = parseInt(dot.dataset.step, 10);
+      dot.classList.toggle('active', dotStep === currentTutorialStep);
+    });
+
+    // Update Next/Finish button text
+    const nextBtn = document.getElementById('btn-tutorial-next');
+    if (nextBtn) {
+      nextBtn.textContent = (currentTutorialStep === totalTutorialSteps - 1) ? 'Finish ✓' : 'Next →';
+    }
+  }
+
+  // Tutorial open/close listeners
+  document.getElementById('btn-open-tutorial')?.addEventListener('click', () => openTutorialModal('tutorial'));
+  document.getElementById('btn-open-tutorial-card')?.addEventListener('click', () => openTutorialModal('tutorial'));
+  document.getElementById('btn-hud-help')?.addEventListener('click', () => openTutorialModal('tutorial'));
+  document.getElementById('btn-close-tutorial')?.addEventListener('click', closeTutorialModal);
+
+  document.getElementById('tutorial-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'tutorial-modal') closeTutorialModal();
+  });
+
+  // Tab buttons
+  document.getElementById('tab-btn-tutorial')?.addEventListener('click', () => switchTutorialTab('tutorial'));
+  document.getElementById('tab-btn-rules')?.addEventListener('click', () => switchTutorialTab('rules'));
+
+  // Step chips
+  document.querySelectorAll('.step-chip').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      const step = parseInt(chip.dataset.step, 10);
+      goToTutorialStep(step);
+    });
+  });
+
+  // Dots
+  document.querySelectorAll('.t-dot').forEach((dot) => {
+    dot.addEventListener('click', () => {
+      const step = parseInt(dot.dataset.step, 10);
+      goToTutorialStep(step);
+    });
+  });
+
+  // Prev / Next buttons
+  document.getElementById('btn-tutorial-prev')?.addEventListener('click', () => {
+    if (currentTutorialStep > 0) {
+      goToTutorialStep(currentTutorialStep - 1);
+    }
+  });
+
+  document.getElementById('btn-tutorial-next')?.addEventListener('click', () => {
+    if (currentTutorialStep < totalTutorialSteps - 1) {
+      goToTutorialStep(currentTutorialStep + 1);
+    } else {
+      closeTutorialModal();
+    }
+  });
+
+  // Interactive Stage Simulators
+  document.getElementById('btn-sim-breach')?.addEventListener('click', () => {
+    window.soundEngine?.playHeartbeat?.(true);
+    const alertEl = document.getElementById('boundary-alert');
+    if (alertEl) {
+      alertEl.style.borderColor = 'var(--crimson)';
+      alertEl.style.display = 'block';
+      setTimeout(() => (alertEl.style.display = 'none'), 1500);
+    }
+  });
+
+  let simIsDuel = true;
+  document.getElementById('btn-sim-duel-toggle')?.addEventListener('click', () => {
+    window.soundEngine?.playClick();
+    simIsDuel = !simIsDuel;
+    const badge = document.querySelector('.anim-vs-badge');
+    const runnerCardP = document.querySelector('.anim-role-card.runner p');
+    if (badge && runnerCardP) {
+      badge.textContent = simIsDuel ? 'VS' : '2v4';
+      runnerCardP.textContent = simIsDuel ? '1v1 Duel Mode' : 'Multiplayer Squad';
+    }
+  });
+
+  document.getElementById('btn-sim-heartbeat')?.addEventListener('click', () => {
+    window.soundEngine?.playHeartbeat?.(true);
+  });
+
+  document.getElementById('btn-sim-sonar-ping')?.addEventListener('click', () => {
+    window.soundEngine?.playPing();
+    const blip = document.querySelector('.anim-ping-blip');
+    if (blip) {
+      blip.style.transform = 'scale(1.4)';
+      setTimeout(() => (blip.style.transform = 'scale(1)'), 400);
+    }
+  });
+
+  document.getElementById('btn-sim-tag-alert')?.addEventListener('click', () => {
+    window.soundEngine?.playFanfare();
+  });
 
   // Utilities
   function haversine(lat1, lon1, lat2, lon2) {

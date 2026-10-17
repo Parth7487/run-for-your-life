@@ -1740,3 +1740,516 @@ body::before {
   background: #16a34a;
 }
 
+/* =========================================================
+   ANIMATED TUTORIAL & OFFICIAL RULEBOOK DESIGN
+   ========================================================= */
+
+.tutorial-action-card {
+  border-color: rgba(249, 232, 172, 0.4);
+  background: linear-gradient(135deg, rgba(33, 31, 30, 0.95), rgba(106, 98, 28, 0.18));
+  margin-top: 4px;
+}
+
+.tutorial-action-card:hover {
+  border-color: var(--parchment);
+  box-shadow: 0 4px 20px rgba(249, 232, 172, 0.15);
+}
+
+.tutorial-badge-pulse {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--parchment);
+  background: rgba(249, 232, 172, 0.15);
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(249, 232, 172, 0.35);
+  letter-spacing: 0.1em;
+  animation: pulseGlow 1.4s infinite alternate;
+}
+
+/* Tutorial Modal Window */
+.tutorial-modal-box {
+  width: 95vw;
+  max-width: 660px;
+  max-height: 90vh;
+  background: #151413;
+  border: 1.5px solid rgba(249, 232, 172, 0.35);
+  border-radius: 16px;
+  box-shadow: 0 0 50px rgba(0, 0, 0, 0.9), 0 0 25px rgba(249, 232, 172, 0.12);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tutorial-header {
+  padding: 12px 16px;
+  background: #1c1a19;
+  border-bottom: 1px solid rgba(249, 232, 172, 0.15);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.tutorial-tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.tutorial-tab {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--parchment-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tutorial-tab.active {
+  background: rgba(249, 232, 172, 0.12);
+  border-color: var(--parchment);
+  color: var(--parchment);
+}
+
+.tutorial-tab-body {
+  display: none;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 16px;
+  flex: 1;
+}
+
+.tutorial-tab-body.active {
+  display: flex;
+}
+
+/* Step Chips Navigation */
+.tutorial-step-chips {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  margin-bottom: 14px;
+}
+
+.step-chip {
+  background: var(--obsidian-surface);
+  border: 1px solid rgba(249, 232, 172, 0.2);
+  border-radius: 20px;
+  color: var(--parchment-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 12px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.step-chip.active {
+  background: var(--crimson);
+  border-color: var(--parchment);
+  color: #fff;
+  box-shadow: 0 0 10px rgba(145, 41, 37, 0.5);
+}
+
+/* Stage Viewport & Stages */
+.tutorial-stage-viewport {
+  background: #0f0e0d;
+  border: 1px solid rgba(249, 232, 172, 0.15);
+  border-radius: 12px;
+  padding: 16px;
+  min-height: 340px;
+  display: flex;
+  flex-direction: column;
+}
+
+.tutorial-stage {
+  display: none;
+  flex-direction: column;
+  gap: 16px;
+  animation: fadeIn 0.3s ease;
+}
+
+.tutorial-stage.active {
+  display: flex;
+}
+
+/* Visualizer Canvas Box */
+.stage-visualizer-box {
+  height: 180px;
+  background: radial-gradient(circle at center, #1e1b19 0%, #0d0c0b 100%);
+  border: 1px solid rgba(249, 232, 172, 0.12);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Stage 0 Visualizer: Animated Geofence */
+.anim-geofence-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.anim-geofence-circle {
+  width: 130px;
+  height: 130px;
+  border: 2px dashed var(--crimson);
+  border-radius: 50%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 20px rgba(145, 41, 37, 0.35);
+  animation: geofenceRotate 18s linear infinite;
+}
+
+.anim-geofence-pulse {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 1px solid var(--crimson);
+  animation: pingRipple 2.2s infinite;
+}
+
+.anim-runner-dot {
+  position: absolute;
+  font-size: 20px;
+  animation: runnerPatrol 4s infinite alternate ease-in-out;
+}
+
+.anim-perimeter-label {
+  position: absolute;
+  bottom: -22px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--crimson);
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+}
+
+@keyframes geofenceRotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes runnerPatrol {
+  0% { transform: translate(-30px, -20px); }
+  50% { transform: translate(15px, 20px); }
+  100% { transform: translate(25px, -15px); }
+}
+
+/* Stage 1 Visualizer: Roles Duo */
+.anim-roles-duo {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.anim-role-card {
+  width: 105px;
+  padding: 12px 8px;
+  border-radius: 8px;
+  text-align: center;
+  font-family: var(--font-mono);
+}
+
+.anim-role-card.hunter {
+  background: rgba(59, 130, 246, 0.15);
+  border: 1.5px solid var(--hunter-blue);
+  color: #93c5fd;
+  box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
+}
+
+.anim-role-card.runner {
+  background: rgba(249, 232, 172, 0.15);
+  border: 1.5px solid var(--parchment);
+  color: var(--parchment);
+  box-shadow: 0 0 15px rgba(249, 232, 172, 0.25);
+}
+
+.anim-role-card .anim-icon {
+  font-size: 26px;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.anim-role-card b {
+  font-size: 13px;
+  display: block;
+}
+
+.anim-role-card p {
+  font-size: 10px;
+  opacity: 0.8;
+  margin-top: 2px;
+}
+
+.anim-vs-badge {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--crimson);
+  background: #000;
+  padding: 6px 8px;
+  border-radius: 50%;
+  border: 1px solid var(--crimson);
+}
+
+/* Stage 2 Visualizer: Scatter Clock */
+.anim-scatter-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.anim-countdown-digit {
+  font-family: var(--font-mono);
+  font-size: 40px;
+  font-weight: 900;
+  color: var(--parchment);
+  text-shadow: 0 0 15px rgba(249, 232, 172, 0.6);
+  letter-spacing: 0.08em;
+}
+
+.anim-scatter-status {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: #60a5fa;
+  letter-spacing: 0.1em;
+}
+
+.anim-scatter-track {
+  width: 180px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.anim-scatter-fill {
+  width: 65%;
+  height: 100%;
+  background: var(--parchment);
+  animation: countdownFill 3s infinite linear;
+}
+
+@keyframes countdownFill {
+  0% { width: 100%; }
+  100% { width: 10%; }
+}
+
+/* Stage 3 Visualizer: Radar Ping */
+.anim-radar-ping-box {
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  border: 1px solid rgba(74, 222, 128, 0.4);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #050a05;
+}
+
+.anim-ping-sweep {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent 70%, rgba(74, 222, 128, 0.4) 100%);
+  animation: sweepSpin 2.5s linear infinite;
+}
+
+.anim-ping-blip {
+  position: absolute;
+  top: 35px;
+  right: 30px;
+  background: var(--crimson);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 800;
+  padding: 2px 5px;
+  border-radius: 3px;
+  box-shadow: 0 0 10px var(--crimson);
+  animation: blipFlash 1.4s infinite;
+}
+
+@keyframes sweepSpin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes blipFlash {
+  0%, 100% { opacity: 0.2; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
+/* Stage 4 Visualizer: Tag & Buffer */
+.anim-tag-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.anim-tag-pulse {
+  background: var(--crimson);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 800;
+  padding: 8px 20px;
+  border-radius: 20px;
+  box-shadow: 0 0 20px rgba(145, 41, 37, 0.7);
+  animation: blinkWarning 0.7s infinite alternate;
+}
+
+.anim-buffer-pill {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  padding: 4px 10px;
+  border-radius: 4px;
+}
+
+/* Stage Info Details */
+.stage-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.stage-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--brass);
+  letter-spacing: 0.12em;
+}
+
+.stage-title {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--parchment);
+  margin: 0;
+}
+
+.stage-desc {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--parchment-muted);
+  margin: 0;
+}
+
+.stage-desc b {
+  color: var(--parchment);
+}
+
+.stage-interactive-action {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+}
+
+/* Carousel Navigation Footer */
+.tutorial-carousel-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(249, 232, 172, 0.1);
+}
+
+.tutorial-dots {
+  display: flex;
+  gap: 8px;
+}
+
+.t-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: rgba(249, 232, 172, 0.25);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.t-dot.active {
+  background: var(--parchment);
+  box-shadow: 0 0 8px var(--parchment);
+  transform: scale(1.2);
+}
+
+/* Complete Rules Tab Styling */
+.rules-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rule-card {
+  background: #11100f;
+  border: 1px solid rgba(249, 232, 172, 0.15);
+  border-radius: 10px;
+  padding: 14px;
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  transition: all 0.2s;
+}
+
+.rule-card:hover {
+  border-color: rgba(249, 232, 172, 0.35);
+  background: #191716;
+}
+
+.rule-num {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 900;
+  color: var(--crimson);
+  background: rgba(145, 41, 37, 0.15);
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(145, 41, 37, 0.4);
+  white-space: nowrap;
+}
+
+.rule-body h4 {
+  font-family: var(--font-title);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--parchment);
+  margin-bottom: 4px;
+}
+
+.rule-body p {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--parchment-muted);
+  margin: 0;
+}
+
+
