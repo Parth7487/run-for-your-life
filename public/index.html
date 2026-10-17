@@ -3,16 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>RUN FOR YOUR LIFE - Real-Life Tactical Game</title>
+  <title>RUN FOR YOUR LIFE - Real-Life Tactical GPS Game</title>
   <meta name="description" content="Real-life hide-and-seek on your phone. Runners hide, hunters chase on foot. Run for your life. Designed and developed by Shopifydevstudio.">
   <meta name="theme-color" content="#912925">
 
   <!-- Leaflet CSS for Map -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
-  <!-- Google Fonts Preconnect & Typographic Engine (Eleven Eleven Twin: Unbounded, Syne, Outfit, Space Mono) -->
+  <!-- Google Fonts Preconnect & Typographic Engine (Takobe Aesthetic + Eleven Eleven Sans) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;700;800;900&family=Syne:wght@600;700;800&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Shojumaru&family=Cinzel+Decorative:wght@700;900&family=Yuji+Mai&family=Unbounded:wght@400;600;700;800;900&family=Syne:wght@600;700;800&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
   <!-- Stylesheet -->
   <link rel="stylesheet" href="style.css">
 </head>
@@ -23,12 +23,36 @@
   <!-- Boundary Flash Warning (Appears when runner leaves zone) -->
   <div id="boundary-alert" class="boundary-warning"></div>
 
-  <!-- 1. SPLASH SCREEN -->
+  <!-- Disconnect Buffer Notification Bar (Top Floating) -->
+  <div id="disconnect-buffer-banner" class="disconnect-buffer-banner" style="display: none;">
+    <span class="pulse-warning-dot"></span>
+    <span id="disconnect-buffer-text">⚠️ OPERATIVE DISCONNECTED • 90s BUFFER ACTIVE</span>
+  </div>
+
+  <!-- 1. DRAMATIC PRELOADER SCREEN (Takobe Art & Animated Running Logo) -->
   <section id="screen-splash" class="screen active">
+    <div class="preloader-backdrop">
+      <img src="assets/takobe-art.png" alt="Takobe Art" class="preloader-art-img">
+      <div class="preloader-vignette"></div>
+    </div>
+
     <div class="splash-box">
-      <div class="brand-sigil" style="width: 64px; height: 64px; font-size: 32px; border-width: 2px; margin-bottom: 20px;">R</div>
-      <h1 class="splash-title-huge">RUN FOR<br>YOUR LIFE</h1>
-      <p class="splash-tagline">REAL-LIFE TACTICAL HIDE & SEEK</p>
+      <!-- Animated Running Silhouette Logo -->
+      <div class="running-logo-box">
+        <img src="assets/running-logo.svg" alt="Running Logo" class="running-logo-animated">
+      </div>
+
+      <!-- Dramatic Calligraphic Title (Takobe Style) -->
+      <h1 class="takobe-hero-title">RUN FOR<br>YOUR LIFE</h1>
+      <p class="takobe-kanji-tagline">リアル 鬼ごっこ • REAL-LIFE GPS TACTICAL ARENA</p>
+
+      <!-- Tactical Progress Line -->
+      <div class="preloader-progress-track">
+        <div id="preloader-progress-fill" class="preloader-progress-fill"></div>
+      </div>
+      <span id="preloader-status-label" class="preloader-status-label">INITIALIZING SATELLITE RADAR...</span>
+
+      <button id="btn-skip-splash" class="btn-preloader-enter">ENTER ARENA →</button>
     </div>
   </section>
 
@@ -36,7 +60,9 @@
   <section id="screen-landing" class="screen">
     <header class="app-header">
       <div class="brand-badge">
-        <div class="brand-sigil">R</div>
+        <div class="brand-sigil">
+          <img src="assets/running-logo.svg" alt="Runner" style="width: 24px; height: 24px;">
+        </div>
         <div class="brand-text-lockup">
           <span class="brand-main-name">RUN FOR YOUR LIFE</span>
           <span class="brand-sub-badge">TACTICAL RADAR</span>
@@ -49,14 +75,19 @@
     </header>
 
     <div class="hero-section">
-      <span class="eyebrow-badge">TACTICAL GPS GAME</span>
+      <span class="eyebrow-badge">TACTICAL GPS GAME • 1v1 OR MULTIPLAYER</span>
       <h2 class="hero-title">Runners hide.<br>Hunters chase.</h2>
       <p class="hero-subtitle">The phone acts as your referee. Drop a boundary zone over your city or park, choose your team, and stay on foot. Every second counts.</p>
     </div>
 
+    <!-- Compulsory Codename Entry -->
     <div class="input-group">
-      <label class="input-label" for="player-name-input">OPERATIVE CODENAME</label>
-      <input type="text" id="player-name-input" class="text-input" placeholder="e.g. Phantom, Vesper, Nomad" maxlength="16">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+        <label class="input-label" for="player-name-input" style="margin: 0;">OPERATIVE CODENAME *</label>
+        <span class="compulsory-tag">COMPULSORY</span>
+      </div>
+      <input type="text" id="player-name-input" class="text-input" placeholder="e.g. Phantom, Vesper, Nomad" maxlength="16" autocomplete="nickname">
+      <span id="name-validation-msg" class="validation-error-msg" style="display: none;">⚠️ Codename is compulsory to initialize tactical uplink!</span>
     </div>
 
     <div class="menu-grid">
@@ -65,7 +96,7 @@
           <span class="card-title">Host Arena</span>
           <span class="card-arrow">→</span>
         </div>
-        <span class="card-desc">Set the play boundary on the map and invite friends with a game code.</span>
+        <span class="card-desc">Set boundary zone, select Hunter & Runner ping intervals, and invite friends.</span>
       </button>
 
       <button id="btn-open-join" class="action-card">
@@ -73,7 +104,7 @@
           <span class="card-title">Join Game</span>
           <span class="card-arrow">→</span>
         </div>
-        <span class="card-desc">Enter a 6-letter room code to jump into an active operation.</span>
+        <span class="card-desc">Enter 6-letter room code (or reconnect automatically within 90-sec grace buffer).</span>
       </button>
     </div>
 
@@ -107,7 +138,8 @@
       <input type="range" id="radius-slider" min="100" max="2500" step="50" value="300" style="width: 100%; accent-color: var(--crimson); height: 6px; cursor: pointer;">
     </div>
 
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px;">
+    <!-- Match Duration & Head Start -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
       <div>
         <label class="input-label">Round Length</label>
         <select id="round-length-select" class="text-input" style="padding: 12px 14px;">
@@ -119,17 +151,56 @@
       </div>
 
       <div>
-        <label class="input-label">Ping Every</label>
-        <select id="ping-interval-select" class="text-input" style="padding: 12px 14px;">
-          <option value="60">1 min (Fast)</option>
-          <option value="180">3 min</option>
-          <option value="300" selected>5 min</option>
-          <option value="480">8 min</option>
+        <label class="input-label">Head Start (Scatter)</label>
+        <select id="head-start-select" class="text-input" style="padding: 12px 14px;">
+          <option value="60">1 min (Sprint)</option>
+          <option value="120">2 min</option>
+          <option value="180" selected>3 min</option>
+          <option value="300">5 min</option>
         </select>
       </div>
     </div>
 
-    <button id="btn-confirm-create-room" class="btn btn-primary">Create Lobby</button>
+    <!-- Individual Location Update / Ping Selectors for Hunter & Runner -->
+    <div class="tactical-options-box">
+      <div class="tactical-box-header">
+        <span class="input-label" style="color: var(--parchment); margin: 0;">📡 Live Location Update Intervals</span>
+        <span class="badge-tag">CUSTOMIZABLE</span>
+      </div>
+      <p style="font-size: 11px; color: var(--parchment-muted); margin-bottom: 12px; line-height: 1.4;">
+        Select independent update intervals (20s–80s) for Hunters and Runners:
+      </p>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div>
+          <label class="input-label" style="color: #60a5fa;">Hunter Location Ping</label>
+          <select id="hunter-ping-interval-select" class="text-input" style="padding: 12px 14px; border-color: rgba(59, 130, 246, 0.4);">
+            <option value="20" selected>20 sec (Fast)</option>
+            <option value="30">30 sec</option>
+            <option value="40">40 sec</option>
+            <option value="50">50 sec</option>
+            <option value="60">60 sec</option>
+            <option value="70">70 sec</option>
+            <option value="80">80 sec</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="input-label" style="color: var(--brass);">Runner Location Ping</label>
+          <select id="runner-ping-interval-select" class="text-input" style="padding: 12px 14px; border-color: rgba(249, 232, 172, 0.4);">
+            <option value="20">20 sec</option>
+            <option value="30">30 sec</option>
+            <option value="40">40 sec</option>
+            <option value="50" selected>50 sec (Tactical)</option>
+            <option value="60">60 sec</option>
+            <option value="70">70 sec</option>
+            <option value="80">80 sec</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <button id="btn-confirm-create-room" class="btn btn-primary" style="margin-top: 14px;">Create Lobby</button>
 
     <footer class="app-footer">
       <p class="footer-credit">Designed and developed by <b>Shopifydevstudio</b></p>
@@ -159,7 +230,7 @@
 
     <input type="text" id="join-code-input" class="text-input" placeholder="e.g. K7Q2FX" maxlength="6" style="text-transform: uppercase; font-family: var(--font-mono); text-align: center; letter-spacing: 0.25em; font-size: 24px; margin-bottom: 24px;">
 
-    <button id="btn-submit-join" class="btn btn-primary">Join Operation</button>
+    <button id="btn-confirm-join" class="btn btn-primary">Join Operation</button>
 
     <footer class="app-footer">
       <p class="footer-credit">Designed and developed by <b>Shopifydevstudio</b></p>
@@ -170,31 +241,41 @@
   <section id="screen-lobby" class="screen">
     <header class="app-header">
       <div class="brand-badge">
-        <span class="eyebrow-badge" style="margin: 0; padding: 4px 8px;">ROOM</span>
-        <span id="lobby-code-display" style="font-family: var(--font-mono); letter-spacing: 0.1em; color: var(--parchment); font-size: 18px; font-weight: 700;">------</span>
+        <div class="brand-sigil">
+          <img src="assets/running-logo.svg" alt="Runner" style="width: 24px; height: 24px;">
+        </div>
+        <div class="brand-text-lockup">
+          <span class="brand-main-name">ROOM CODE</span>
+          <span id="lobby-code-badge" class="brand-sub-badge" style="font-size: 16px; color: var(--parchment); letter-spacing: 0.15em; font-weight: 800;">------</span>
+        </div>
       </div>
-      <button id="btn-copy-code" class="btn btn-secondary" style="width: auto; height: 38px; padding: 0 14px; font-size: 12px;">Copy Link</button>
+      <button id="btn-copy-link" class="btn btn-secondary" style="width: auto; height: 38px; padding: 0 14px; font-size: 12px;">Share Code</button>
     </header>
 
-    <div style="text-align: center; margin-bottom: 16px;">
-      <span class="eyebrow-badge" style="background: var(--brass);">ROOM CODE</span>
-      <h2 id="lobby-big-code" style="font-size: 42px; font-family: var(--font-mono); letter-spacing: 0.12em; color: var(--parchment); margin: 4px 0 8px;">------</h2>
-      <p style="font-size: 12px; color: var(--parchment-muted);">Players join with this code on their phones.</p>
+    <!-- 2-Player 1v1 Indicator -->
+    <div id="lobby-2player-badge" class="duel-badge" style="display: none;">
+      ⚔️ 2-PLAYER 1v1 DUEL READY (1 HUNTER VS 1 RUNNER)
     </div>
 
-    <span class="eyebrow-badge">Choose Your Allegiance</span>
+    <!-- Role Selection -->
+    <span class="eyebrow-badge">Select Role Preference</span>
     <div class="role-cards">
       <div class="role-card" data-role="hunter">
-        <div class="role-title" style="color: #60a5fa;">Hunter</div>
-        <div class="role-desc">You're it. Track and tag.</div>
+        <div style="font-size: 24px; margin-bottom: 4px;">🎯</div>
+        <div class="role-title">Hunter</div>
+        <div class="role-desc">Chase & tag runners</div>
       </div>
+
       <div class="role-card" data-role="runner">
-        <div class="role-title" style="color: var(--parchment);">Runner</div>
-        <div class="role-desc">Run & stay hidden.</div>
+        <div style="font-size: 24px; margin-bottom: 4px;">🏃</div>
+        <div class="role-title">Runner</div>
+        <div class="role-desc">Hide & survive round</div>
       </div>
+
       <div class="role-card selected" data-role="random">
+        <div style="font-size: 24px; margin-bottom: 4px;">🎲</div>
         <div class="role-title">Random</div>
-        <div class="role-desc">Auto-balance teams.</div>
+        <div class="role-desc">Balanced fair pick</div>
       </div>
     </div>
 
@@ -255,9 +336,21 @@
         <span id="hud-game-clock" class="hud-time">45:00</span>
       </div>
 
-      <div class="hud-pill hud-ping-timer">
-        <span class="hud-ping-label">Next Ping</span>
-        <span id="hud-ping-clock" class="hud-ping-val">05:00</span>
+      <!-- Dual Ping Counters & Live Chat Button -->
+      <div style="display: flex; gap: 8px;">
+        <div class="hud-pill hud-ping-timer" title="Hunter Location Broadcast Rate">
+          <span class="hud-ping-label" style="color: #60a5fa;">H-Ping</span>
+          <span id="hud-hunter-ping-clock" class="hud-ping-val" style="color: #60a5fa;">30s</span>
+        </div>
+
+        <div class="hud-pill hud-ping-timer" title="Runner Radar Ping Rate">
+          <span class="hud-ping-label" style="color: var(--parchment);">R-Ping</span>
+          <span id="hud-runner-ping-clock" class="hud-ping-val">50s</span>
+        </div>
+
+        <button id="btn-open-chat" class="hud-pill icon-btn-hud" title="Live Tactical Chat">
+          💬 <span id="chat-unread-badge" class="chat-badge" style="display: none;">0</span>
+        </button>
       </div>
     </div>
 
@@ -294,13 +387,43 @@
         I'VE BEEN TAGGED
       </button>
     </div>
+
+    <!-- Tactical Live Chat Drawer -->
+    <div id="chat-drawer" class="chat-drawer">
+      <div class="chat-drawer-header">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span>💬</span>
+          <span class="card-title" style="font-size: 15px; margin: 0;">TACTICAL COMMUNICATIONS</span>
+        </div>
+        <button id="btn-close-chat" class="icon-button" style="width: 32px; height: 32px; font-size: 14px;">✕</button>
+      </div>
+
+      <div class="chat-stream" id="chat-stream">
+        <div class="chat-system-msg">Tactical communication channel online. Transmit coordinates and target photos.</div>
+      </div>
+
+      <!-- Image preview thumbnail before send -->
+      <div id="chat-photo-preview-bar" class="chat-photo-preview-bar" style="display: none;">
+        <img id="chat-preview-thumbnail" src="" alt="Photo thumbnail" class="chat-thumb-img">
+        <span style="font-size: 11px; color: var(--parchment-muted);">Intel photo attached</span>
+        <button id="btn-remove-photo" class="icon-button" style="width: 24px; height: 24px; margin-left: auto; font-size: 12px;">✕</button>
+      </div>
+
+      <!-- Chat Input Controls -->
+      <div class="chat-input-bar">
+        <input type="file" id="chat-photo-file-input" accept="image/*" capture="environment" style="display: none;">
+        <button id="btn-attach-photo" class="icon-button" title="Capture / Upload Photo" style="width: 44px; height: 44px; flex-shrink: 0; font-size: 18px;">📷</button>
+        <input type="text" id="chat-message-input" class="text-input" placeholder="Transmit intel or photo..." style="padding: 10px 14px; font-size: 14px;">
+        <button id="btn-send-chat" class="btn btn-primary" style="width: auto; height: 44px; padding: 0 16px; font-size: 13px; flex-shrink: 0;">➤</button>
+      </div>
+    </div>
   </section>
 
   <!-- 8. GAME OVER SCREEN -->
   <section id="screen-game-over" class="screen">
     <div style="text-align: center; margin: auto 0;">
       <span class="eyebrow-badge">MATCH TERMINATED</span>
-      <h1 id="game-over-winner-title" class="hero-title" style="font-size: 46px; color: var(--parchment); margin-bottom: 12px;">HUNTERS WON</h1>
+      <h1 id="game-over-winner-title" class="hero-title" style="font-size: 44px; color: var(--parchment); margin-bottom: 12px;">HUNTERS WON</h1>
       <p id="game-over-reason" style="font-size: 15px; color: var(--parchment-muted); margin-bottom: 26px;">All runners were tagged before time expired.</p>
 
       <div style="background: var(--obsidian-surface); border: 1px solid var(--parchment-dim); border-radius: 14px; padding: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; text-align: left; margin-bottom: 26px;">
@@ -322,10 +445,20 @@
     </footer>
   </section>
 
+  <!-- Full-Screen Photo Lightbox Modal -->
+  <div id="photo-lightbox-modal" class="modal-overlay" style="z-index: 3000;">
+    <div style="position: relative; max-width: 90vw; max-height: 85vh; display: flex; flex-direction: column; align-items: center;">
+      <img id="lightbox-full-img" src="" alt="Enlarged intel photo" style="max-width: 100%; max-height: 80vh; border-radius: 8px; border: 2px solid var(--parchment); object-fit: contain;">
+      <button id="btn-close-lightbox" class="icon-button" style="position: absolute; top: -14px; right: -14px; background: var(--crimson); border-color: #fff; width: 34px; height: 34px; font-size: 14px;">✕</button>
+    </div>
+  </div>
+
   <!-- MODAL: Location Permission Modal -->
   <div id="location-permission-modal" class="modal-overlay">
     <div class="modal-card">
-      <div class="brand-sigil" style="margin: 0 auto 16px;">📍</div>
+      <div class="brand-sigil" style="margin: 0 auto 16px;">
+        <img src="assets/running-logo.svg" alt="Runner" style="width: 24px; height: 24px;">
+      </div>
       <h3 class="modal-title">Enable GPS Location</h3>
       <p class="modal-desc">
         <b>Run for Your Life</b> requires your device's live location to place you on the arena map, detect boundaries, and broadcast radar pings.<br><br>

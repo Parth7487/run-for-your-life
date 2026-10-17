@@ -132,9 +132,40 @@ wss.on('connection', (ws) => {
         const player = room.players.get(playerId);
         if (player) {
           player.connected = false;
+          player.disconnectedAt = Date.now();
+          player.graceSeconds = 90;
+
+          // Broadcast 90s reconnect buffer to all operatives
+          broadcastToRoom(room, {
+            type: 'PLAYER_DISCONNECTED_BUFFER',
+            playerId: player.id,
+            playerName: player.name,
+            graceSeconds: 90
+          });
+
+          // 90 second grace timer before eliminating/removing disconnected operative
+          if (player.graceTimeout) clearTimeout(player.graceTimeout);
+          player.graceTimeout = setTimeout(() => {
+            if (!player.connected) {
+              console.log(`[DISCONNECT] 90s buffer expired for ${player.name} (${player.id}) in room ${room.code}`);
+              room.players.delete(player.id);
+              broadcastToRoom(room, {
+                type: 'PLAYER_REMOVED_TIMEOUT',
+                playerId: player.id,
+                playerName: player.name
+              });
+              checkEndConditions(room);
+
+              const activeCount = Array.from(room.players.values()).filter((p) => p.connected).length;
+              if (activeCount === 0) {
+                if (room.timer) clearInterval(room.timer);
+                rooms.delete(room.code);
+              }
+            }
+          }, 90000);
         }
 
-        // If host disconnected, assign new host or clean up
+        // If host disconnected, assign new host if other connected players exist
         if (room.hostId === playerId) {
           const connectedPlayers = Array.from(room.players.values()).filter((p) => p.connected);
           if (connectedPlayers.length > 0) {
@@ -142,13 +173,7 @@ wss.on('connection', (ws) => {
           }
         }
 
-        const remainingCount = Array.from(room.players.values()).filter((p) => p.connected).length;
-        if (remainingCount === 0) {
-          clearInterval(room.timer);
-          rooms.delete(client.roomId);
-        } else {
-          broadcastRoomState(room);
-        }
+        broadcastRoomState(room);
       }
     }
     clients.delete(ws);
@@ -159,23 +184,32 @@ function handleMessage(ws, playerId, msg) {
   switch (msg.type) {
     case 'CREATE_ROOM': {
       const code = generateRoomCode();
+      const hunterPingInterval = parseInt(msg.hunterPingInterval, 10) || 30; // 20-80s
+      const runnerPingInterval = parseInt(msg.runnerPingInterval, 10) || 50; // 20-80s
+
       const room = {
         code,
         hostId: playerId,
         state: 'LOBBY', // LOBBY, HEAD_START, HUNT, ENDED
         config: {
-          arena: msg.arena || { lat: 37.7749, lng: -122.4194, radius: 300 }, // Default 300m
-          roundLength: msg.roundLength || 45 * 60, // 45 minutes
-          headStart: msg.headStart || 3 * 60, // 3 minutes
-          pingInterval: msg.pingInterval || 5 * 60 // 5 minutes
+          arena: msg.arena || { lat: 37.7749, lng: -122.4194, radius: 300 },
+          roundLength: msg.roundLength || 45 * 60,
+          headStart: msg.headStart || 3 * 60,
+          hunterPingInterval, // Hunter location update frequency
+          runnerPingInterval, // Runner location update frequency
+          pingInterval: runnerPingInterval // fallback compatibility
         },
         players: new Map(),
         sockets: new Map(),
         phaseStartTime: null,
         timeRemaining: 0,
-        nextPingIn: 0,
-        lastPing: null,
+        nextHunterPingIn: hunterPingInterval,
+        nextRunnerPingIn: runnerPingInterval,
+        nextPingIn: runnerPingInterval,
+        lastHunterPing: null,
+        lastRunnerPing: null,
         pingsHistory: [],
+        chatHistory: [],
         winner: null,
         timer: null
       };
@@ -211,6 +245,53 @@ function handleMessage(ws, playerId, msg) {
         ws.send(JSON.stringify({ type: 'ERROR', message: 'Room not found. Check the 6-letter code!' }));
         return;
       }
+
+      // Check if this is a player reconnecting within the 90s grace buffer with the same name
+      let reconnectingPlayer = null;
+      for (const p of room.players.values()) {
+        if (!p.connected && (p.name.toLowerCase() === msg.name?.toLowerCase().trim() || p.id === msg.playerId)) {
+          reconnectingPlayer = p;
+          break;
+        }
+      }
+
+      if (reconnectingPlayer) {
+        if (reconnectingPlayer.graceTimeout) {
+          clearTimeout(reconnectingPlayer.graceTimeout);
+          reconnectingPlayer.graceTimeout = null;
+        }
+        reconnectingPlayer.connected = true;
+        reconnectingPlayer.disconnectedAt = null;
+
+        room.sockets.set(reconnectingPlayer.id, ws);
+        const client = clients.get(ws);
+        if (client) {
+          client.roomId = room.code;
+          client.playerId = reconnectingPlayer.id;
+        }
+
+        ws.send(JSON.stringify({
+          type: 'RECONNECT_SUCCESS',
+          roomCode: room.code,
+          playerId: reconnectingPlayer.id,
+          assignedRole: reconnectingPlayer.assignedRole,
+          state: room.state,
+          arena: room.config.arena,
+          config: room.config,
+          timeRemaining: room.timeRemaining,
+          nextHunterPingIn: room.nextHunterPingIn,
+          nextRunnerPingIn: room.nextRunnerPingIn
+        }));
+
+        broadcastToRoom(room, {
+          type: 'PLAYER_RECONNECTED',
+          playerId: reconnectingPlayer.id,
+          playerName: reconnectingPlayer.name
+        });
+        broadcastRoomState(room);
+        return;
+      }
+
       if (room.state !== 'LOBBY') {
         ws.send(JSON.stringify({ type: 'ERROR', message: 'Game has already started!' }));
         return;
@@ -240,6 +321,94 @@ function handleMessage(ws, playerId, msg) {
       break;
     }
 
+    case 'RECONNECT_ROOM': {
+      const room = rooms.get(msg.roomCode?.toUpperCase());
+      if (!room) {
+        ws.send(JSON.stringify({ type: 'ERROR', message: 'Room not found or expired.' }));
+        return;
+      }
+
+      let targetPlayer = null;
+      for (const p of room.players.values()) {
+        if (p.name.toLowerCase() === msg.name?.toLowerCase().trim() || p.id === msg.playerId) {
+          targetPlayer = p;
+          break;
+        }
+      }
+
+      if (!targetPlayer) {
+        ws.send(JSON.stringify({ type: 'ERROR', message: 'No registered operative found with this name.' }));
+        return;
+      }
+
+      if (targetPlayer.graceTimeout) {
+        clearTimeout(targetPlayer.graceTimeout);
+        targetPlayer.graceTimeout = null;
+      }
+      targetPlayer.connected = true;
+      targetPlayer.disconnectedAt = null;
+
+      room.sockets.set(targetPlayer.id, ws);
+      const client = clients.get(ws);
+      if (client) {
+        client.roomId = room.code;
+        client.playerId = targetPlayer.id;
+      }
+
+      ws.send(JSON.stringify({
+        type: 'RECONNECT_SUCCESS',
+        roomCode: room.code,
+        playerId: targetPlayer.id,
+        assignedRole: targetPlayer.assignedRole,
+        state: room.state,
+        arena: room.config.arena,
+        config: room.config,
+        timeRemaining: room.timeRemaining,
+        nextHunterPingIn: room.nextHunterPingIn,
+        nextRunnerPingIn: room.nextRunnerPingIn,
+        players: serializePlayers(room)
+      }));
+
+      broadcastToRoom(room, {
+        type: 'PLAYER_RECONNECTED',
+        playerId: targetPlayer.id,
+        playerName: targetPlayer.name
+      });
+      broadcastRoomState(room);
+      break;
+    }
+
+    case 'SEND_CHAT': {
+      const client = clients.get(ws);
+      if (!client?.roomId) return;
+      const room = rooms.get(client.roomId);
+      if (!room) return;
+
+      const player = room.players.get(playerId);
+      if (!player) return;
+
+      const chatMsg = {
+        id: 'msg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+        senderId: player.id,
+        senderName: player.name,
+        role: player.assignedRole || player.rolePreference,
+        text: msg.text || '',
+        photoUrl: msg.photoUrl || null,
+        targetChannel: msg.targetChannel || 'ALL',
+        timestamp: Date.now()
+      };
+
+      if (!room.chatHistory) room.chatHistory = [];
+      room.chatHistory.push(chatMsg);
+      if (room.chatHistory.length > 100) room.chatHistory.shift();
+
+      broadcastToRoom(room, {
+        type: 'CHAT_MESSAGE',
+        message: chatMsg
+      });
+      break;
+    }
+
     case 'UPDATE_CONFIG': {
       const client = clients.get(ws);
       if (!client?.roomId) return;
@@ -249,7 +418,16 @@ function handleMessage(ws, playerId, msg) {
       if (msg.arena) room.config.arena = msg.arena;
       if (msg.roundLength) room.config.roundLength = msg.roundLength;
       if (msg.headStart) room.config.headStart = msg.headStart;
-      if (msg.pingInterval) room.config.pingInterval = msg.pingInterval;
+      if (msg.hunterPingInterval) {
+        room.config.hunterPingInterval = parseInt(msg.hunterPingInterval, 10);
+        room.nextHunterPingIn = room.config.hunterPingInterval;
+      }
+      if (msg.runnerPingInterval) {
+        room.config.runnerPingInterval = parseInt(msg.runnerPingInterval, 10);
+        room.config.pingInterval = room.config.runnerPingInterval;
+        room.nextRunnerPingIn = room.config.runnerPingInterval;
+        room.nextPingIn = room.config.runnerPingInterval;
+      }
 
       broadcastRoomState(room);
       break;
@@ -476,16 +654,20 @@ function startHuntPhase(room) {
   room.state = 'HUNT';
   room.phaseStartTime = Date.now();
   room.timeRemaining = room.config.roundLength;
-  room.nextPingIn = room.config.pingInterval;
+  room.nextHunterPingIn = room.config.hunterPingInterval || 30;
+  room.nextRunnerPingIn = room.config.runnerPingInterval || 50;
+  room.nextPingIn = room.nextRunnerPingIn;
 
-  // Immediate initial ping so hunters get an initial clue where runners scattered to!
-  triggerPing(room);
+  // Immediate initial pings so both teams establish initial radar contact
+  triggerHunterPing(room);
+  triggerRunnerPing(room);
 
   broadcastToRoom(room, {
     type: 'PHASE_CHANGED',
     state: room.state,
     timeRemaining: room.timeRemaining,
-    nextPingIn: room.nextPingIn,
+    nextHunterPingIn: room.nextHunterPingIn,
+    nextRunnerPingIn: room.nextRunnerPingIn,
     players: serializePlayers(room)
   });
 
@@ -493,11 +675,21 @@ function startHuntPhase(room) {
 
   room.timer = setInterval(() => {
     room.timeRemaining--;
-    room.nextPingIn--;
+    room.nextHunterPingIn--;
+    room.nextRunnerPingIn--;
+    room.nextPingIn = room.nextRunnerPingIn;
 
-    if (room.nextPingIn <= 0) {
-      triggerPing(room);
-      room.nextPingIn = room.config.pingInterval;
+    // Check Hunter Ping Interval trigger
+    if (room.nextHunterPingIn <= 0) {
+      triggerHunterPing(room);
+      room.nextHunterPingIn = room.config.hunterPingInterval || 30;
+    }
+
+    // Check Runner Ping Interval trigger
+    if (room.nextRunnerPingIn <= 0) {
+      triggerRunnerPing(room);
+      room.nextRunnerPingIn = room.config.runnerPingInterval || 50;
+      room.nextPingIn = room.nextRunnerPingIn;
     }
 
     if (room.timeRemaining <= 0) {
@@ -507,13 +699,15 @@ function startHuntPhase(room) {
         type: 'CLOCK_TICK',
         state: room.state,
         timeRemaining: room.timeRemaining,
-        nextPingIn: room.nextPingIn
+        nextHunterPingIn: room.nextHunterPingIn,
+        nextRunnerPingIn: room.nextRunnerPingIn,
+        nextPingIn: room.nextRunnerPingIn
       });
     }
   }, 1000);
 }
 
-function triggerPing(room) {
+function triggerRunnerPing(room) {
   const runnerPings = [];
   for (const p of room.players.values()) {
     if (p.assignedRole === 'runner' && !p.isTagged) {
@@ -528,17 +722,48 @@ function triggerPing(room) {
   }
 
   const pingEvent = {
+    type: 'RUNNER_PING',
     timestamp: Date.now(),
     runnerPings
   };
 
+  room.lastRunnerPing = pingEvent;
   room.lastPing = pingEvent;
   room.pingsHistory.push(pingEvent);
 
   broadcastToRoom(room, {
     type: 'PING_FIRED',
+    pingType: 'RUNNER',
     ping: pingEvent,
     totalPings: room.pingsHistory.length
+  });
+}
+
+function triggerHunterPing(room) {
+  const hunterPings = [];
+  for (const p of room.players.values()) {
+    if (p.assignedRole === 'hunter') {
+      hunterPings.push({
+        id: p.id,
+        name: p.name,
+        lat: p.lat,
+        lng: p.lng
+      });
+    }
+  }
+
+  const pingEvent = {
+    type: 'HUNTER_PING',
+    timestamp: Date.now(),
+    hunterPings
+  };
+
+  room.lastHunterPing = pingEvent;
+
+  broadcastToRoom(room, {
+    type: 'HUNTER_PING_FIRED',
+    pingType: 'HUNTER',
+    ping: pingEvent
   });
 }
 
@@ -593,7 +818,9 @@ function broadcastRoomState(room) {
     config: room.config,
     players: serializePlayers(room),
     timeRemaining: room.timeRemaining,
-    nextPingIn: room.nextPingIn,
+    nextHunterPingIn: room.nextHunterPingIn,
+    nextRunnerPingIn: room.nextRunnerPingIn,
+    nextPingIn: room.nextRunnerPingIn,
     lastPing: room.lastPing
   });
 }

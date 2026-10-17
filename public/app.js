@@ -6,17 +6,27 @@
 
   // State
   let ws = null;
-  let myPlayerId = 'p_' + Math.random().toString(36).substring(2, 9);
-  let myRoomCode = null;
+  let myPlayerId = localStorage.getItem('RFYL_ACTIVE_PLAYER_ID') || ('p_' + Math.random().toString(36).substring(2, 9));
+  localStorage.setItem('RFYL_ACTIVE_PLAYER_ID', myPlayerId);
+
+  let myRoomCode = localStorage.getItem('RFYL_ACTIVE_ROOM') || null;
   let isHost = false;
   let currentRole = 'random';
   let myAssignedRole = null; // 'hunter' | 'runner'
   let myPosition = { lat: 37.7749, lng: -122.4194 }; // Default San Francisco
   let myPath = [];
-  let useSimulationGps = false; // Will be set by permission prompt
+  let useSimulationGps = false;
   let hasLocationPermission = false;
   let watchPositionId = null;
   let pendingActionAfterPermission = null;
+
+  // Pending Photo for Chat
+  let pendingChatPhoto = null;
+  let unreadChatCount = 0;
+  let isChatOpen = false;
+
+  // Disconnect Buffer Timer
+  let disconnectBufferInterval = null;
 
   // Maps
   let setupMap = null;
@@ -56,18 +66,98 @@
     }, 150);
   }
 
-  // Auto-transition from splash after 1.4s
-  setTimeout(() => {
+  // --- DRAMATIC TAKOBE PRELOADER ---
+  let preloaderFinished = false;
+  function finishPreloader() {
+    if (preloaderFinished) return;
+    preloaderFinished = true;
     showScreen('landing');
+    
+    // Check if shared via URL link
     const urlParams = new URLSearchParams(window.location.search);
     const roomParam = urlParams.get('room');
     if (roomParam) {
-      document.getElementById('join-code-input').value = roomParam.toUpperCase();
+      const joinInput = document.getElementById('join-code-input');
+      if (joinInput) joinInput.value = roomParam.toUpperCase();
       showScreen('join');
     }
-  }, 1400);
+  }
 
-  // Initialize WebSocket (Local & fallback)
+  // Animate preloader progress
+  const progressFill = document.getElementById('preloader-progress-fill');
+  const statusLabel = document.getElementById('preloader-status-label');
+  const skipBtn = document.getElementById('btn-skip-splash');
+
+  if (skipBtn) {
+    skipBtn.addEventListener('click', () => {
+      finishPreloader();
+    });
+  }
+
+  const preloaderSteps = [
+    { p: 20, text: 'INITIALIZING SATELLITE RADAR...' },
+    { p: 45, text: 'CALIBRATING GPS SENSORS...' },
+    { p: 70, text: 'LOADING TAKOBE DISPLAY SYSTEM...' },
+    { p: 90, text: 'CONNECTING TO SUPABASE REALTIME...' },
+    { p: 100, text: 'TACTICAL RADAR READY' }
+  ];
+
+  let stepIdx = 0;
+  function runPreloaderStep() {
+    if (preloaderFinished) return;
+    if (stepIdx < preloaderSteps.length) {
+      const step = preloaderSteps[stepIdx];
+      if (progressFill) progressFill.style.width = step.p + '%';
+      if (statusLabel) statusLabel.textContent = step.text;
+      stepIdx++;
+      setTimeout(runPreloaderStep, 450);
+    } else {
+      setTimeout(finishPreloader, 400);
+    }
+  }
+  runPreloaderStep();
+
+  // --- COMPULSORY OPERATIVE CODENAME SYSTEM ---
+  const nameInput = document.getElementById('player-name-input');
+  const nameWarning = document.getElementById('name-validation-msg');
+
+  // Load saved name if any
+  const savedPlayerName = localStorage.getItem('RFYL_PLAYER_NAME');
+  if (savedPlayerName && nameInput) {
+    nameInput.value = savedPlayerName;
+  }
+
+  function validatePlayerName() {
+    const val = nameInput ? nameInput.value.trim() : '';
+    if (!val) {
+      if (nameWarning) {
+        nameWarning.style.display = 'block';
+        nameWarning.classList.add('shake');
+        setTimeout(() => nameWarning.classList.remove('shake'), 600);
+      }
+      if (nameInput) {
+        nameInput.focus();
+        nameInput.classList.add('error-shake');
+        setTimeout(() => nameInput.classList.remove('error-shake'), 600);
+      }
+      window.soundEngine?.playHeartbeat?.();
+      return null;
+    }
+    if (nameWarning) nameWarning.style.display = 'none';
+    localStorage.setItem('RFYL_PLAYER_NAME', val);
+    return val;
+  }
+
+  if (nameInput) {
+    nameInput.addEventListener('input', () => {
+      if (nameInput.value.trim().length > 0) {
+        if (nameWarning) nameWarning.style.display = 'none';
+        localStorage.setItem('RFYL_PLAYER_NAME', nameInput.value.trim());
+      }
+    });
+  }
+
+  // --- INITIALIZE WEBSOCKET WITH 90s RECONNECT SUPPORT ---
   function initWebSocket() {
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
 
@@ -77,7 +167,20 @@
       ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
-        console.log('Connected to local game server');
+        console.log('Connected to game server');
+
+        // Check if we need to auto-reconnect to an active room
+        const activeRoom = localStorage.getItem('RFYL_ACTIVE_ROOM');
+        const activeName = localStorage.getItem('RFYL_PLAYER_NAME');
+        if (activeRoom && activeName && myPlayerId) {
+          console.log(`Attempting reconnect to room ${activeRoom} as ${activeName}`);
+          ws.send(JSON.stringify({
+            type: 'RECONNECT_ROOM',
+            roomCode: activeRoom,
+            playerId: myPlayerId,
+            name: activeName
+          }));
+        }
       };
 
       ws.onmessage = (event) => {
@@ -100,15 +203,17 @@
 
   initWebSocket();
 
-  // Handle Server & Supabase Messages
+  // --- SERVER & REALTIME MESSAGE HANDLER ---
   function handleServerMessage(msg) {
     switch (msg.type) {
       case 'ROOM_CREATED':
         myPlayerId = msg.playerId || myPlayerId;
         myRoomCode = msg.roomCode;
         isHost = true;
-        document.getElementById('lobby-code-display').textContent = myRoomCode;
-        document.getElementById('lobby-big-code').textContent = myRoomCode;
+        localStorage.setItem('RFYL_ACTIVE_ROOM', myRoomCode);
+        localStorage.setItem('RFYL_ACTIVE_PLAYER_ID', myPlayerId);
+
+        updateLobbyRoomCode(myRoomCode);
         document.getElementById('btn-start-game').style.display = 'block';
         document.getElementById('host-waiting-msg').style.display = 'none';
         showScreen('lobby');
@@ -116,14 +221,23 @@
         break;
 
       case 'ROOM_JOINED':
+      case 'RECONNECTED':
         myPlayerId = msg.playerId || myPlayerId;
         myRoomCode = msg.roomCode;
         isHost = false;
-        document.getElementById('lobby-code-display').textContent = myRoomCode;
-        document.getElementById('lobby-big-code').textContent = myRoomCode;
+        localStorage.setItem('RFYL_ACTIVE_ROOM', myRoomCode);
+        localStorage.setItem('RFYL_ACTIVE_PLAYER_ID', myPlayerId);
+
+        updateLobbyRoomCode(myRoomCode);
         document.getElementById('btn-start-game').style.display = 'none';
         document.getElementById('host-waiting-msg').style.display = 'block';
-        showScreen('lobby');
+        
+        if (msg.roomState && (msg.roomState.state === 'HUNT' || msg.roomState.state === 'HEAD_START')) {
+          currentRoomData = msg.roomState;
+          handlePhaseChange(msg.roomState);
+        } else {
+          showScreen('lobby');
+        }
         connectToSupabaseRoom(myRoomCode);
         break;
 
@@ -142,6 +256,8 @@
         break;
 
       case 'PING_FIRED':
+      case 'HUNTER_PING_FIRED':
+      case 'RUNNER_PING_FIRED':
         handlePingFired(msg);
         break;
 
@@ -157,13 +273,86 @@
         handleGameOver(msg);
         break;
 
+      case 'PLAYER_DISCONNECTED_BUFFER':
+        handlePlayerDisconnectedBuffer(msg);
+        break;
+
+      case 'PLAYER_RECONNECTED':
+        handlePlayerReconnected(msg);
+        break;
+
+      case 'PLAYER_DROPPED':
+        handlePlayerDropped(msg);
+        break;
+
+      case 'CHAT_MESSAGE':
+        receiveChatMessage(msg.message || msg);
+        break;
+
       case 'ERROR':
         alert(msg.message);
         break;
     }
   }
 
-  // Supabase Realtime Bridge
+  function updateLobbyRoomCode(code) {
+    const badge = document.getElementById('lobby-code-badge');
+    if (badge) badge.textContent = code;
+  }
+
+  // --- 90-SECOND DISCONNECT BUFFER NOTIFICATION ---
+  function handlePlayerDisconnectedBuffer(data) {
+    const banner = document.getElementById('disconnect-buffer-banner');
+    const textEl = document.getElementById('disconnect-buffer-text');
+    if (!banner || !textEl) return;
+
+    let bufferSeconds = data.bufferSeconds || 90;
+    banner.style.display = 'flex';
+    textEl.textContent = `⚠️ OPERATIVE ${escapeHtml(data.name).toUpperCase()} SIGNAL LOST • 90s REJOIN BUFFER ACTIVE (${bufferSeconds}s)`;
+
+    if (disconnectBufferInterval) clearInterval(disconnectBufferInterval);
+
+    disconnectBufferInterval = setInterval(() => {
+      bufferSeconds--;
+      if (bufferSeconds <= 0) {
+        clearInterval(disconnectBufferInterval);
+        textEl.textContent = `❌ OPERATIVE ${escapeHtml(data.name).toUpperCase()} DISCONNECTED (TIMEOUT)`;
+        setTimeout(() => (banner.style.display = 'none'), 4000);
+      } else {
+        textEl.textContent = `⚠️ OPERATIVE ${escapeHtml(data.name).toUpperCase()} SIGNAL LOST • 90s REJOIN BUFFER ACTIVE (${bufferSeconds}s)`;
+      }
+    }, 1000);
+  }
+
+  function handlePlayerReconnected(data) {
+    const banner = document.getElementById('disconnect-buffer-banner');
+    const textEl = document.getElementById('disconnect-buffer-text');
+    if (disconnectBufferInterval) clearInterval(disconnectBufferInterval);
+
+    if (banner && textEl) {
+      banner.style.display = 'flex';
+      textEl.textContent = `⚡ OPERATIVE ${escapeHtml(data.name).toUpperCase()} RE-ESTABLISHED SATELLITE UPLINK!`;
+      setTimeout(() => {
+        banner.style.display = 'none';
+      }, 3500);
+    }
+  }
+
+  function handlePlayerDropped(data) {
+    const banner = document.getElementById('disconnect-buffer-banner');
+    const textEl = document.getElementById('disconnect-buffer-text');
+    if (disconnectBufferInterval) clearInterval(disconnectBufferInterval);
+
+    if (banner && textEl) {
+      banner.style.display = 'flex';
+      textEl.textContent = `❌ OPERATIVE ${escapeHtml(data.name).toUpperCase()} DISCONNECTED`;
+      setTimeout(() => {
+        banner.style.display = 'none';
+      }, 3000);
+    }
+  }
+
+  // --- SUPABASE REALTIME BRIDGE ---
   async function connectToSupabaseRoom(code) {
     if (!window.supabaseGameManager) return;
     const playerName = document.getElementById('player-name-input').value.trim() || 'Operative';
@@ -191,10 +380,15 @@
           handlePhaseChange(event.payload);
         } else if (event.type === 'GAME_OVER') {
           handleGameOver(event.payload);
+        } else if (event.type === 'CHAT_MESSAGE') {
+          receiveChatMessage(event.payload);
+        } else if (event.type === 'PLAYER_DISCONNECTED_BUFFER') {
+          handlePlayerDisconnectedBuffer(event.payload);
+        } else if (event.type === 'PLAYER_RECONNECTED') {
+          handlePlayerReconnected(event.payload);
         }
       },
       (presencePlayers) => {
-        // Update presence in lobby
         if (presencePlayers && presencePlayers.length > 0) {
           updateLobbyWithPresence(presencePlayers);
         }
@@ -223,7 +417,6 @@
   }
 
   // --- LOCATION PERMISSION SYSTEM ---
-
   function requestLocationPermission(actionCallback) {
     if (hasLocationPermission) {
       actionCallback();
@@ -235,7 +428,7 @@
   }
 
   document.getElementById('btn-allow-gps').addEventListener('click', () => {
-    window.soundEngine.playClick();
+    window.soundEngine?.playClick();
     document.getElementById('location-permission-modal').classList.remove('active');
 
     if (navigator.geolocation) {
@@ -275,7 +468,7 @@
   });
 
   document.getElementById('btn-deny-gps').addEventListener('click', () => {
-    window.soundEngine.playClick();
+    window.soundEngine?.playClick();
     document.getElementById('location-permission-modal').classList.remove('active');
     hasLocationPermission = true;
     useSimulationGps = true;
@@ -295,7 +488,7 @@
 
   // Settings Modal (Supabase Configuration)
   document.getElementById('btn-open-settings').addEventListener('click', () => {
-    window.soundEngine.playClick();
+    window.soundEngine?.playClick();
     document.getElementById('supabase-url-input').value = window.supabaseGameManager.supabaseUrl;
     document.getElementById('supabase-key-input').value = window.supabaseGameManager.supabaseAnonKey;
     document.getElementById('settings-modal').classList.add('active');
@@ -306,7 +499,7 @@
   });
 
   document.getElementById('btn-save-settings').addEventListener('click', () => {
-    window.soundEngine.playClick();
+    window.soundEngine?.playClick();
     const url = document.getElementById('supabase-url-input').value.trim();
     const key = document.getElementById('supabase-key-input').value.trim();
     window.supabaseGameManager.updateCredentials(url, key);
@@ -314,10 +507,12 @@
     document.getElementById('settings-modal').classList.remove('active');
   });
 
-  // --- SCREEN NAVIGATION & SETUP ---
-
+  // --- NAVIGATION & GATING WITH COMPULSORY NAME ---
   document.getElementById('btn-open-host').addEventListener('click', () => {
-    window.soundEngine.playClick();
+    window.soundEngine?.playClick();
+    const name = validatePlayerName();
+    if (!name) return;
+
     requestLocationPermission(() => {
       showScreen('hostSetup');
       initSetupMap();
@@ -325,23 +520,26 @@
   });
 
   document.getElementById('host-back-btn').addEventListener('click', () => {
-    window.soundEngine.playClick();
+    window.soundEngine?.playClick();
     showScreen('landing');
   });
 
   document.getElementById('btn-open-join').addEventListener('click', () => {
-    window.soundEngine.playClick();
+    window.soundEngine?.playClick();
+    const name = validatePlayerName();
+    if (!name) return;
+
     requestLocationPermission(() => {
       showScreen('join');
     });
   });
 
   document.getElementById('join-back-btn').addEventListener('click', () => {
-    window.soundEngine.playClick();
+    window.soundEngine?.playClick();
     showScreen('landing');
   });
 
-  // Setup Map (Draggable Arena Geofence)
+  // --- SETUP MAP (DRAGGABLE ARENA GEOFENCE) ---
   function initSetupMap() {
     if (setupMap) return;
 
@@ -375,14 +573,17 @@
     });
   }
 
-  // Confirm Create Room
+  // --- CREATE ROOM (DUAL PING INTERVALS SELECTION) ---
   document.getElementById('btn-confirm-create-room').addEventListener('click', () => {
-    window.soundEngine.playClick();
-    const name = document.getElementById('player-name-input').value.trim() || 'Operative One';
-    const center = setupMap.getCenter();
+    window.soundEngine?.playClick();
+    const name = validatePlayerName() || 'Operative One';
+    const center = setupMap ? setupMap.getCenter() : myPosition;
     const radius = parseInt(document.getElementById('radius-slider').value, 10);
     const roundLength = parseInt(document.getElementById('round-length-select').value, 10);
-    const pingInterval = parseInt(document.getElementById('ping-interval-select').value, 10);
+    
+    // Custom individual Hunter and Runner Ping Intervals (20s - 80s)
+    const hunterPingInterval = parseInt(document.getElementById('hunter-ping-interval-select')?.value || '30', 10);
+    const runnerPingInterval = parseInt(document.getElementById('runner-ping-interval-select')?.value || '50', 10);
 
     const arena = { lat: center.lat, lng: center.lng, radius };
 
@@ -393,12 +594,14 @@
           name,
           arena,
           roundLength,
-          pingInterval,
+          pingInterval: runnerPingInterval,
+          hunterPingInterval,
+          runnerPingInterval,
           headStart: 180
         })
       );
     } else {
-      // Direct client room creation if serverless / Vercel
+      // Direct client room creation if offline / Vercel
       const randomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
       handleServerMessage({
         type: 'ROOM_CREATED',
@@ -409,20 +612,20 @@
         code: randomCode,
         hostId: myPlayerId,
         state: 'LOBBY',
-        config: { arena, roundLength, pingInterval, headStart: 180 },
+        config: { arena, roundLength, pingInterval: runnerPingInterval, hunterPingInterval, runnerPingInterval, headStart: 180 },
         timeRemaining: roundLength
       });
     }
   });
 
-  // Submit Join Room
-  document.getElementById('btn-submit-join').addEventListener('click', () => {
-    window.soundEngine.playClick();
+  // --- JOIN ROOM ---
+  document.getElementById('btn-confirm-join').addEventListener('click', () => {
+    window.soundEngine?.playClick();
+    const name = validatePlayerName() || 'Operative ' + Math.floor(Math.random() * 90 + 10);
     const code = document.getElementById('join-code-input').value.trim().toUpperCase();
-    const name = document.getElementById('player-name-input').value.trim() || 'Operative ' + Math.floor(Math.random() * 90 + 10);
 
     if (code.length !== 6) {
-      alert('Please enter a valid 6-letter room code.');
+      alert('Please enter a valid 6-letter operation code.');
       return;
     }
 
@@ -436,7 +639,6 @@
         })
       );
     } else {
-      // Direct client join
       handleServerMessage({
         type: 'ROOM_JOINED',
         roomCode: code,
@@ -446,19 +648,22 @@
   });
 
   // Copy Room Link
-  document.getElementById('btn-copy-code').addEventListener('click', () => {
-    window.soundEngine.playClick();
+  document.getElementById('btn-copy-link')?.addEventListener('click', () => {
+    window.soundEngine?.playClick();
     const url = `${window.location.origin}?room=${myRoomCode}`;
     navigator.clipboard.writeText(url).then(() => {
-      document.getElementById('btn-copy-code').textContent = 'Copied!';
-      setTimeout(() => (document.getElementById('btn-copy-code').textContent = 'Copy Link'), 2000);
+      const copyBtn = document.getElementById('btn-copy-link');
+      if (copyBtn) {
+        copyBtn.textContent = 'Copied!';
+        setTimeout(() => (copyBtn.textContent = 'Share Code'), 2000);
+      }
     });
   });
 
   // Role Selection Cards in Lobby
   document.querySelectorAll('.role-card').forEach((card) => {
     card.addEventListener('click', () => {
-      window.soundEngine.playClick();
+      window.soundEngine?.playClick();
       document.querySelectorAll('.role-card').forEach((c) => c.classList.remove('selected', 'hunter', 'runner'));
       card.classList.add('selected');
       const role = card.dataset.role;
@@ -476,13 +681,12 @@
     });
   });
 
-  // Start Game Button (Host only)
+  // --- START GAME (WITH 2-PLAYER 1v1 SUPPORT) ---
   document.getElementById('btn-start-game').addEventListener('click', () => {
-    window.soundEngine.playClick();
+    window.soundEngine?.playClick();
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'START_GAME' }));
     } else {
-      // Local / Supabase broadcast start
       const startPayload = {
         state: 'HEAD_START',
         timeRemaining: 180,
@@ -493,7 +697,7 @@
     }
   });
 
-  // Update Lobby UI
+  // --- UPDATE LOBBY UI & 2-PLAYER 1v1 DUEL BADGE ---
   function updateLobbyUI(data) {
     const players = data.players || [];
     document.getElementById('lobby-player-count').textContent = players.length;
@@ -507,6 +711,17 @@
     const totalVotes = huntersCount + runnersCount || 1;
     document.getElementById('fairness-hunter-bar').style.width = `${(huntersCount / totalVotes) * 100}%`;
     document.getElementById('fairness-runner-bar').style.width = `${(runnersCount / totalVotes) * 100}%`;
+
+    // 2-Player 1v1 Duel Detection
+    const duelBadge = document.getElementById('lobby-2player-badge');
+    const startBtn = document.getElementById('btn-start-game');
+    if (players.length === 2) {
+      if (duelBadge) duelBadge.style.display = 'block';
+      if (startBtn) startBtn.textContent = 'LAUNCH 1v1 DUEL';
+    } else {
+      if (duelBadge) duelBadge.style.display = 'none';
+      if (startBtn) startBtn.textContent = 'LAUNCH OPERATION';
+    }
 
     const listEl = document.getElementById('lobby-player-list');
     listEl.innerHTML = '';
@@ -523,14 +738,13 @@
   }
 
   function formatTime(sec) {
-    const s = Math.max(0, Math.floor(sec));
+    const s = Math.max(0, Math.floor(sec || 0));
     const m = Math.floor(s / 60);
     const rem = s % 60;
     return `${m.toString().padStart(2, '0')}:${rem.toString().padStart(2, '0')}`;
   }
 
   // --- PHASE MANAGEMENT ---
-
   function handlePhaseChange(data) {
     const me = data.players?.find((p) => p.id === myPlayerId);
     if (me && me.assignedRole) {
@@ -541,7 +755,7 @@
 
     if (data.state === 'HEAD_START') {
       showScreen('scatter');
-      window.soundEngine.playHeartbeat();
+      window.soundEngine?.playHeartbeat();
 
       const isRunner = myAssignedRole === 'runner';
       const roleTag = document.getElementById('scatter-role-badge');
@@ -563,13 +777,14 @@
       startLocationTracking();
     } else if (data.state === 'HUNT') {
       showScreen('hunt');
-      window.soundEngine.playPing();
+      window.soundEngine?.playPing();
       initGameMap();
       updateGameHUD();
       startLocationTracking();
     }
   }
 
+  // --- CLOCK TICK & INDEPENDENT DUAL PING COUNTDOWNS ---
   function handleClockTick(data) {
     if (data.state === 'HEAD_START') {
       document.getElementById('scatter-timer-text').textContent = formatTime(data.timeRemaining);
@@ -578,20 +793,28 @@
       document.getElementById('scatter-progress-bar').style.width = `${progressPercent}%`;
 
       if (data.timeRemaining <= 10) {
-        window.soundEngine.playHeartbeat(true);
+        window.soundEngine?.playHeartbeat(true);
       }
     } else if (data.state === 'HUNT') {
       document.getElementById('hud-game-clock').textContent = formatTime(data.timeRemaining);
-      document.getElementById('hud-ping-clock').textContent = formatTime(data.nextPingIn);
 
-      if (data.nextPingIn <= 5 && data.nextPingIn > 0) {
-        window.soundEngine.playHeartbeat(false);
+      // Dual ping interval indicators
+      const hunterClock = document.getElementById('hud-hunter-ping-clock');
+      const runnerClock = document.getElementById('hud-runner-ping-clock');
+
+      const hPingIn = data.hunterPingIn !== undefined ? data.hunterPingIn : data.nextPingIn;
+      const rPingIn = data.runnerPingIn !== undefined ? data.runnerPingIn : data.nextPingIn;
+
+      if (hunterClock) hunterClock.textContent = `${hPingIn}s`;
+      if (runnerClock) runnerClock.textContent = `${rPingIn}s`;
+
+      if ((hPingIn <= 4 && hPingIn > 0) || (rPingIn <= 4 && rPingIn > 0)) {
+        window.soundEngine?.playHeartbeat(false);
       }
     }
   }
 
   // --- TACTICAL GAME MAP & HUD ---
-
   function initGameMap() {
     if (gameMap) return;
 
@@ -664,7 +887,7 @@
 
   // Ping Event Handling
   function handlePingFired(msg) {
-    window.soundEngine.playPing();
+    window.soundEngine?.playPing();
     if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
 
     const isHunter = myAssignedRole === 'hunter';
@@ -725,7 +948,7 @@
 
   // Player Tagged Event
   function handlePlayerTagged(msg) {
-    window.soundEngine.playTagAlarm();
+    window.soundEngine?.playTagAlarm();
     if (navigator.vibrate) navigator.vibrate([400, 200, 400]);
 
     alert(`🎯 TAGGED! ${msg.runnerName} was tagged by ${msg.hunterName}!`);
@@ -741,7 +964,7 @@
 
   // Game Over Event
   function handleGameOver(msg) {
-    window.soundEngine.playFanfare();
+    window.soundEngine?.playFanfare();
     showScreen('gameOver');
 
     const winnerTitle = document.getElementById('game-over-winner-title');
@@ -757,19 +980,20 @@
       reasonText.textContent = 'Runners evaded the chase and survived the round!';
     }
 
-    const durationMin = Math.round(msg.stats?.durationSeconds / 60) || 1;
+    const durationMin = Math.round((msg.stats?.durationSeconds || 0) / 60) || 1;
     document.getElementById('stat-match-duration').textContent = `${durationMin} min`;
     document.getElementById('stat-match-pings').textContent = `${msg.stats?.totalPings || 0} pings`;
   }
 
   document.getElementById('btn-return-lobby').addEventListener('click', () => {
-    window.soundEngine.playClick();
+    window.soundEngine?.playClick();
+    localStorage.removeItem('RFYL_ACTIVE_ROOM');
     showScreen('landing');
   });
 
   // Force Ping Test Button
   document.getElementById('btn-force-ping').addEventListener('click', () => {
-    window.soundEngine.playClick();
+    window.soundEngine?.playClick();
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'FORCE_PING' }));
     }
@@ -786,7 +1010,6 @@
   });
 
   // --- LOCATION TRACKING & SIMULATION JOYSTICK ---
-
   function startLocationTracking() {
     if (useSimulationGps) {
       document.getElementById('joystick').style.display = 'flex';
@@ -924,9 +1147,8 @@
   }
 
   // --- TAG ACTION DIALOGS ---
-
   document.getElementById('btn-tag-action').addEventListener('click', () => {
-    window.soundEngine.playClick();
+    window.soundEngine?.playClick();
     const runners = (currentRoomData?.players || []).filter((p) => p.assignedRole === 'runner' && !p.isTagged);
     const container = document.getElementById('tag-runner-options');
     container.innerHTML = '';
@@ -964,7 +1186,7 @@
 
   document.getElementById('btn-runner-tagged-action').addEventListener('click', () => {
     if (confirm("Confirm that a hunter has tagged you in person? You'll become a spectator.")) {
-      window.soundEngine.playClick();
+      window.soundEngine?.playClick();
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'CONFIRM_TAGGED_SELF' }));
       }
@@ -973,6 +1195,186 @@
         runnerName: document.getElementById('player-name-input').value.trim() || 'Runner',
         hunterName: 'Hunters'
       });
+    }
+  });
+
+  // --- LIVE TACTICAL CHAT & INLINE PHOTO UPLOAD ---
+  const chatDrawer = document.getElementById('chat-drawer');
+  const chatStream = document.getElementById('chat-stream');
+  const chatMessageInput = document.getElementById('chat-message-input');
+  const chatPhotoFileInput = document.getElementById('chat-photo-file-input');
+  const chatPhotoPreviewBar = document.getElementById('chat-photo-preview-bar');
+  const chatPreviewThumbnail = document.getElementById('chat-preview-thumbnail');
+  const chatUnreadBadge = document.getElementById('chat-unread-badge');
+
+  // Toggle Chat Drawer
+  document.getElementById('btn-open-chat')?.addEventListener('click', () => {
+    window.soundEngine?.playClick();
+    isChatOpen = true;
+    chatDrawer?.classList.add('open');
+    unreadChatCount = 0;
+    if (chatUnreadBadge) chatUnreadBadge.style.display = 'none';
+    chatStream.scrollTop = chatStream.scrollHeight;
+  });
+
+  document.getElementById('btn-close-chat')?.addEventListener('click', () => {
+    isChatOpen = false;
+    chatDrawer?.classList.remove('open');
+  });
+
+  // Attach Photo Click
+  document.getElementById('btn-attach-photo')?.addEventListener('click', () => {
+    chatPhotoFileInput?.click();
+  });
+
+  // Photo Selected & Compressed via Canvas
+  chatPhotoFileInput?.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        // Client-side canvas compression down to max 800px width/height and 0.75 JPEG
+        const maxDim = 800;
+        let width = img.width;
+        let height = img.height;
+        if (width > height && width > maxDim) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        } else if (height > maxDim) {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        pendingChatPhoto = canvas.toDataURL('image/jpeg', 0.75);
+
+        // Display preview bar
+        if (chatPreviewThumbnail) chatPreviewThumbnail.src = pendingChatPhoto;
+        if (chatPhotoPreviewBar) chatPhotoPreviewBar.style.display = 'flex';
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  // Remove pending photo
+  document.getElementById('btn-remove-photo')?.addEventListener('click', () => {
+    pendingChatPhoto = null;
+    if (chatPhotoPreviewBar) chatPhotoPreviewBar.style.display = 'none';
+    if (chatPhotoFileInput) chatPhotoFileInput.value = '';
+  });
+
+  // Send Chat Message
+  function sendCurrentChat() {
+    const text = chatMessageInput ? chatMessageInput.value.trim() : '';
+    if (!text && !pendingChatPhoto) return;
+
+    const playerName = document.getElementById('player-name-input').value.trim() || 'Operative';
+    const messagePayload = {
+      id: 'msg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      senderId: myPlayerId,
+      senderName: playerName,
+      role: myAssignedRole || currentRole,
+      text: text,
+      photoUrl: pendingChatPhoto || null,
+      timestamp: Date.now()
+    };
+
+    // 1. Send to server via WS
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'SEND_CHAT', ...messagePayload }));
+    }
+
+    // 2. Broadcast via Supabase
+    if (window.supabaseGameManager) {
+      window.supabaseGameManager.sendChatMessage(messagePayload);
+    }
+
+    // Render locally immediately
+    receiveChatMessage(messagePayload);
+
+    // Reset inputs
+    if (chatMessageInput) chatMessageInput.value = '';
+    pendingChatPhoto = null;
+    if (chatPhotoPreviewBar) chatPhotoPreviewBar.style.display = 'none';
+    if (chatPhotoFileInput) chatPhotoFileInput.value = '';
+  }
+
+  document.getElementById('btn-send-chat')?.addEventListener('click', sendCurrentChat);
+  chatMessageInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      sendCurrentChat();
+    }
+  });
+
+  // Receive Chat Message
+  function receiveChatMessage(msg) {
+    if (!chatStream) return;
+
+    // Check if duplicate
+    const existing = document.getElementById(msg.id);
+    if (existing) return;
+
+    const isMe = msg.senderId === myPlayerId;
+    const msgEl = document.createElement('div');
+    msgEl.id = msg.id;
+    msgEl.className = `chat-msg ${isMe ? 'outgoing' : 'incoming'}`;
+
+    const roleClass = msg.role === 'hunter' ? 'chat-badge-hunter' : (msg.role === 'runner' ? 'chat-badge-runner' : '');
+    const timeFormatted = new Date(msg.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    let photoHtml = '';
+    if (msg.photoUrl) {
+      photoHtml = `<div class="chat-photo-wrapper"><img src="${msg.photoUrl}" alt="Intel Photo" class="chat-attached-photo" onclick="window.viewPhotoLightbox('${msg.photoUrl}')"></div>`;
+    }
+
+    msgEl.innerHTML = `
+      <div class="chat-msg-header">
+        <span class="chat-sender-badge ${roleClass}">${escapeHtml(msg.senderName)}</span>
+        <span class="chat-time">${timeFormatted}</span>
+      </div>
+      ${msg.text ? `<div class="chat-msg-text">${escapeHtml(msg.text)}</div>` : ''}
+      ${photoHtml}
+    `;
+
+    chatStream.appendChild(msgEl);
+    chatStream.scrollTop = chatStream.scrollHeight;
+
+    if (!isChatOpen && !isMe) {
+      unreadChatCount++;
+      if (chatUnreadBadge) {
+        chatUnreadBadge.textContent = unreadChatCount;
+        chatUnreadBadge.style.display = 'flex';
+      }
+      window.soundEngine?.playClick();
+    }
+  }
+
+  // Lightbox Viewer
+  window.viewPhotoLightbox = (url) => {
+    const modal = document.getElementById('photo-lightbox-modal');
+    const img = document.getElementById('lightbox-full-img');
+    if (modal && img) {
+      img.src = url;
+      modal.classList.add('active');
+    }
+  };
+
+  document.getElementById('btn-close-lightbox')?.addEventListener('click', () => {
+    document.getElementById('photo-lightbox-modal')?.classList.remove('active');
+  });
+
+  document.getElementById('photo-lightbox-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'photo-lightbox-modal') {
+      document.getElementById('photo-lightbox-modal').classList.remove('active');
     }
   });
 
@@ -990,6 +1392,7 @@
   }
 
   function escapeHtml(str) {
+    if (!str) return '';
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;

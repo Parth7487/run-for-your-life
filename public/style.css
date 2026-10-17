@@ -1,4 +1,20 @@
-@import url('https://fonts.googleapis.com/css2?family=Unbounded:wght@400;600;700;800;900&family=Syne:wght@600;700;800&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Outfit:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Shojumaru&family=Cinzel+Decorative:wght@700;900&family=Yuji+Mai&family=Unbounded:wght@400;600;700;800;900&family=Syne:wght@600;700;800&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Outfit:wght@400;500;600;700&display=swap');
+
+/* =========================================================
+   TAKOBE DISPLAY FONT (Authentype Japanese Aesthetic)
+   Dramatic calligraphic curves, sweeping flair, sword terminals
+   ========================================================= */
+@font-face {
+  font-family: 'Takobe';
+  src: url('fonts/Takobe.woff2') format('woff2'),
+       url('fonts/Takobe.otf') format('opentype'),
+       url('fonts/Takobe.ttf') format('truetype'),
+       local('Takobe'),
+       local('Takobe Regular');
+  font-weight: 400 900;
+  font-style: normal;
+  font-display: swap;
+}
 
 /* =========================================================
    ELEVEN ELEVEN SANS SERIF (Blanc Salváge Design System)
@@ -56,7 +72,8 @@
   --hunter-blue: #3b82f6;
   --runner-gold: #F9E8AC;
 
-  /* Typography - Eleven Eleven Sans Serif + Geometric Twin System */
+  /* Typography - Takobe Calligraphic Display + Eleven Eleven Geometric Sans */
+  --font-takobe: 'Takobe', 'Shojumaru', 'Cinzel Decorative', 'Yuji Mai', serif;
   --font-display: 'Eleven Eleven', 'Unbounded', 'Syne', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-title: 'Eleven Eleven', 'Unbounded', 'Syne', -apple-system, sans-serif;
   --font-body: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -176,9 +193,9 @@ body::before {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* 1. Splash Screen */
+/* 1. Dramatic Takobe Preloader Screen */
 #screen-splash {
-  background: var(--crimson);
+  background: var(--obsidian);
   color: var(--parchment);
   align-items: center;
   justify-content: center;
@@ -189,36 +206,126 @@ body::before {
   overflow: hidden;
 }
 
+.preloader-backdrop {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  z-index: 1;
+}
+
+.preloader-art-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  filter: brightness(0.65) saturate(1.25) contrast(1.1);
+  animation: slowZoomKenBurns 16s ease-in-out infinite alternate;
+}
+
+.preloader-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, rgba(145, 41, 37, 0.3) 0%, rgba(21, 20, 19, 0.75) 55%, rgba(21, 20, 19, 0.98) 100%);
+}
+
 .splash-box {
   position: relative;
+  z-index: 10;
   width: 100%;
-  max-width: 340px;
+  max-width: 360px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-direction: column;
+  padding: 0 20px;
 }
 
-.splash-title-huge {
-  font-family: var(--font-display);
-  font-size: 50px;
+.running-logo-box {
+  width: 74px;
+  height: 74px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.running-logo-animated {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 0 14px rgba(249, 232, 172, 0.65)) drop-shadow(0 0 24px rgba(145, 41, 37, 0.8));
+  animation: runnerSprintBounce 0.55s ease-in-out infinite alternate;
+}
+
+.takobe-hero-title {
+  font-family: var(--font-takobe);
+  font-size: 44px;
   font-weight: 900;
-  letter-spacing: 0.04em;
-  line-height: 0.98;
+  line-height: 1.05;
+  letter-spacing: 0.05em;
   color: var(--parchment);
+  text-shadow: 0 0 25px rgba(145, 41, 37, 0.9), 0 4px 18px rgba(0,0,0,0.9);
+  margin-bottom: 8px;
   text-transform: uppercase;
-  margin-bottom: 14px;
-  text-shadow: 0 4px 20px rgba(0,0,0,0.6);
 }
 
-.splash-tagline {
+.takobe-kanji-tagline {
   font-family: var(--font-display);
   font-size: 11px;
-  letter-spacing: 0.22em;
   font-weight: 700;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--parchment);
-  opacity: 0.9;
+  opacity: 0.92;
+  margin-bottom: 22px;
+}
+
+.preloader-progress-track {
+  width: 100%;
+  max-width: 260px;
+  height: 4px;
+  background: rgba(249, 232, 172, 0.15);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.preloader-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--crimson), var(--parchment));
+  transition: width 0.3s ease;
+  box-shadow: 0 0 12px var(--crimson);
+}
+
+.preloader-status-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--parchment-dim);
+  text-transform: uppercase;
+  margin-bottom: 22px;
+}
+
+.btn-preloader-enter {
+  background: rgba(145, 41, 37, 0.92);
+  border: 1px solid var(--parchment);
+  border-radius: 6px;
+  color: var(--parchment);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  padding: 10px 24px;
+  cursor: pointer;
+  transition: all 0.2s var(--pop);
+  box-shadow: 0 4px 16px var(--crimson-glow);
+}
+
+.btn-preloader-enter:hover {
+  background: var(--crimson-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px var(--crimson-glow);
 }
 
 /* 2. Header & Branding */
@@ -1002,4 +1109,306 @@ body::before {
 .footer-credit b {
   color: var(--parchment);
   font-weight: 800;
+}
+
+/* 15. Compulsory Name & Validation Feedback */
+.compulsory-tag {
+  font-size: 9px;
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: var(--crimson);
+  background: rgba(145, 41, 37, 0.18);
+  border: 1px solid var(--crimson);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.validation-error-msg {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #ff5252;
+  margin-top: 6px;
+  display: block;
+}
+
+.input-error {
+  border-color: #ff5252 !important;
+  box-shadow: 0 0 0 3px rgba(255, 82, 82, 0.4) !important;
+  animation: shakeError 0.3s ease;
+}
+
+@keyframes shakeError {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+/* 16. Tactical Options Box (Dual Ping Selectors) */
+.tactical-options-box {
+  background: var(--obsidian-surface);
+  border: 1px solid var(--parchment-dim);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+
+.tactical-box-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.badge-tag {
+  font-size: 9px;
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--parchment);
+  background: rgba(249, 232, 172, 0.12);
+  border: 1px solid var(--parchment-dim);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* 17. 2-Player 1v1 Duel Badge */
+.duel-badge {
+  background: linear-gradient(90deg, rgba(59, 130, 246, 0.22), rgba(145, 41, 37, 0.28));
+  border: 1px solid var(--parchment-dim);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-align: center;
+  color: var(--parchment);
+  margin-bottom: 16px;
+  animation: pulseGlow 2.5s infinite alternate;
+}
+
+/* 18. Disconnect 90-Second Buffer Banner */
+.disconnect-buffer-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2800;
+  background: #912925;
+  color: #fff;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.85);
+  border-bottom: 1px solid var(--parchment);
+  animation: slideDownBanner 0.3s ease;
+}
+
+@keyframes slideDownBanner {
+  from { transform: translateY(-100%); }
+  to { transform: translateY(0); }
+}
+
+.pulse-warning-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ffea00;
+  box-shadow: 0 0 10px #ffea00;
+  animation: blinkWarning 0.7s infinite alternate;
+}
+
+/* 19. Tactical Live Chat Drawer */
+.icon-btn-hud {
+  cursor: pointer;
+  border-color: var(--parchment);
+  background: var(--obsidian-surface);
+  transition: transform 0.2s;
+}
+
+.icon-btn-hud:hover {
+  transform: scale(1.05);
+}
+
+.chat-badge {
+  background: var(--crimson);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 10px;
+  margin-left: 4px;
+}
+
+.chat-drawer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 400px;
+  max-height: 82vh;
+  background: rgba(21, 20, 19, 0.98);
+  backdrop-filter: blur(16px);
+  border-top: 1px solid var(--parchment);
+  z-index: 2200;
+  display: flex;
+  flex-direction: column;
+  transform: translateY(105%);
+  transition: transform 0.32s var(--pop);
+  border-radius: 18px 18px 0 0;
+  box-shadow: 0 -10px 40px rgba(0,0,0,0.9);
+}
+
+.chat-drawer.open {
+  transform: translateY(0);
+}
+
+.chat-drawer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(249, 232, 172, 0.1);
+}
+
+.chat-stream {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.chat-system-msg {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--parchment-dim);
+  text-align: center;
+  margin: 6px 0;
+  line-height: 1.4;
+}
+
+.chat-msg-bubble {
+  background: var(--obsidian-surface);
+  border: 1px solid rgba(249, 232, 172, 0.15);
+  border-radius: 8px;
+  padding: 8px 12px;
+  max-width: 82%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.chat-msg-bubble.hunter {
+  border-left: 3px solid #3b82f6;
+}
+
+.chat-msg-bubble.runner {
+  border-left: 3px solid var(--brass);
+}
+
+.chat-msg-bubble.self {
+  margin-left: auto;
+  background: rgba(145, 41, 37, 0.28);
+  border-color: rgba(249, 232, 172, 0.3);
+}
+
+.chat-sender-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chat-sender-name {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--parchment);
+}
+
+.chat-msg-time {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--parchment-dim);
+  margin-left: auto;
+}
+
+.chat-msg-text {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: #fff;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.chat-img-attachment {
+  width: 100%;
+  max-width: 200px;
+  max-height: 160px;
+  object-fit: cover;
+  border-radius: 6px;
+  margin-top: 4px;
+  cursor: pointer;
+  border: 1px solid rgba(249, 232, 172, 0.3);
+  transition: transform 0.2s;
+}
+
+.chat-img-attachment:hover {
+  transform: scale(1.02);
+  border-color: var(--parchment);
+}
+
+.chat-photo-preview-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  background: rgba(33, 31, 30, 0.95);
+  border-top: 1px solid rgba(249, 232, 172, 0.12);
+}
+
+.chat-thumb-img {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid var(--parchment);
+}
+
+.chat-input-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px calc(var(--safe-bottom) + 10px);
+  border-top: 1px solid rgba(249, 232, 172, 0.12);
+  background: var(--obsidian);
+}
+
+/* Keyframe Animations */
+@keyframes slowZoomKenBurns {
+  0% { transform: scale(1); }
+  100% { transform: scale(1.1); }
+}
+
+@keyframes runnerSprintBounce {
+  0% { transform: translateY(0px) rotate(0deg); }
+  100% { transform: translateY(-5px) rotate(2deg); }
+}
+
+@keyframes blinkWarning {
+  0% { opacity: 0.2; transform: scale(0.85); }
+  100% { opacity: 1; transform: scale(1.15); }
+}
+
+@keyframes pulseGlow {
+  0% { box-shadow: 0 0 6px rgba(249, 232, 172, 0.1); }
+  100% { box-shadow: 0 0 16px rgba(249, 232, 172, 0.35); }
 }

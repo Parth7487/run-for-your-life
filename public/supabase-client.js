@@ -71,8 +71,20 @@ class SupabaseGameManager {
         .on('broadcast', { event: 'ping_fired' }, ({ payload }) => {
           onEvent({ type: 'PING_FIRED', payload });
         })
+        .on('broadcast', { event: 'hunter_ping_fired' }, ({ payload }) => {
+          onEvent({ type: 'HUNTER_PING_FIRED', payload });
+        })
         .on('broadcast', { event: 'player_tagged' }, ({ payload }) => {
           onEvent({ type: 'PLAYER_TAGGED', payload });
+        })
+        .on('broadcast', { event: 'chat_message' }, ({ payload }) => {
+          onEvent({ type: 'CHAT_MESSAGE', payload });
+        })
+        .on('broadcast', { event: 'player_disconnected_buffer' }, ({ payload }) => {
+          onEvent({ type: 'PLAYER_DISCONNECTED_BUFFER', payload });
+        })
+        .on('broadcast', { event: 'player_reconnected' }, ({ payload }) => {
+          onEvent({ type: 'PLAYER_RECONNECTED', payload });
         })
         .on('broadcast', { event: 'phase_change' }, ({ payload }) => {
           onEvent({ type: 'PHASE_CHANGED', payload });
@@ -143,6 +155,37 @@ class SupabaseGameManager {
     }
   }
 
+  async sendChatMessage(messageData) {
+    if (this.channel) {
+      try {
+        await this.channel.send({
+          type: 'broadcast',
+          event: 'chat_message',
+          payload: messageData
+        });
+        this.saveMessageToDb(messageData);
+      } catch (err) {
+        console.warn('Chat broadcast failed:', err);
+      }
+    }
+  }
+
+  async saveMessageToDb(msg) {
+    if (!this.client || !this.roomCode) return;
+    try {
+      await this.client.from('game_messages').insert({
+        room_code: this.roomCode,
+        sender_id: msg.senderId,
+        sender_name: msg.senderName,
+        role: msg.role,
+        message: msg.text,
+        photo_url: msg.photoUrl
+      });
+    } catch (e) {
+      // Non-blocking fallback
+    }
+  }
+
   async saveRoomToDb(roomData) {
     if (!this.client) return;
     try {
@@ -154,7 +197,8 @@ class SupabaseGameManager {
         settings: {
           roundLength: roomData.config.roundLength,
           headStart: roomData.config.headStart,
-          pingInterval: roomData.config.pingInterval
+          hunterPingInterval: roomData.config.hunterPingInterval || 30,
+          runnerPingInterval: roomData.config.runnerPingInterval || 50
         },
         time_remaining: roomData.timeRemaining
       });
