@@ -369,11 +369,13 @@
   async function connectToSupabaseRoom(code) {
     if (!window.supabaseGameManager) return;
     const playerName = document.getElementById('player-name-input').value.trim() || 'Operative';
+    const myRole = myAssignedRole || currentRole || (isHost ? 'hunter' : 'runner');
     const player = {
       id: myPlayerId,
       name: playerName,
-      rolePreference: currentRole,
-      assignedRole: myAssignedRole,
+      rolePreference: myRole,
+      assignedRole: myAssignedRole || myRole,
+      role: myRole,
       lat: myPosition.lat,
       lng: myPosition.lng
     };
@@ -395,24 +397,87 @@
   function handlePeerLocation(data) {
     const payload = data.payload ? { ...data.payload, ...data } : data;
     if (!payload || payload.playerId === myPlayerId) return;
+
+    if (!currentRoomData) currentRoomData = { players: [] };
+    if (!currentRoomData.players) currentRoomData.players = [];
+
+    const isHunter = myAssignedRole === 'hunter' || currentRole === 'hunter' || isHost;
+    let role = payload.role;
+    if (!role || role === 'random') {
+      role = isHunter ? 'runner' : 'hunter';
+    }
+
+    const existing = currentRoomData.players.find((p) => p.id === payload.playerId);
+    if (existing) {
+      existing.assignedRole = role;
+      existing.role = role;
+      existing.name = payload.name || existing.name || 'Operative';
+      existing.lat = payload.lat;
+      existing.lng = payload.lng;
+    } else {
+      currentRoomData.players.push({
+        id: payload.playerId,
+        name: payload.name || 'Operative',
+        assignedRole: role,
+        role: role,
+        rolePreference: role,
+        lat: payload.lat,
+        lng: payload.lng,
+        isTagged: false
+      });
+    }
+    updateRunnersAliveCount();
+
     if (myAssignedRole === 'hunter' && payload.role === 'hunter' && payload.lat && payload.lng) {
       updateHunterPositions([{ id: payload.playerId, name: payload.name || 'Hunter', lat: payload.lat, lng: payload.lng }]);
     }
   }
 
   function updateLobbyWithPresence(presencePlayers) {
-    const formattedPlayers = presencePlayers.map((p) => ({
-      id: p.id,
-      name: p.name,
-      rolePreference: p.rolePreference || 'random',
-      assignedRole: p.assignedRole,
-      connected: true,
-      isTagged: p.isTagged || false
-    }));
+    const formattedPlayers = presencePlayers.map((p) => {
+      let role = p.assignedRole || p.role;
+      if (!role || role === 'random') {
+        if (p.rolePreference && p.rolePreference !== 'random') {
+          role = p.rolePreference;
+        } else if (currentRoomData?.hostId) {
+          role = p.id === currentRoomData.hostId ? 'hunter' : 'runner';
+        } else if (p.id === myPlayerId) {
+          role = isHost ? 'hunter' : 'runner';
+        } else {
+          role = (myAssignedRole === 'hunter' || currentRole === 'hunter' || isHost) ? 'runner' : 'hunter';
+        }
+      }
+      return {
+        id: p.id,
+        name: p.name,
+        rolePreference: role || 'runner',
+        assignedRole: role || 'runner',
+        role: role || 'runner',
+        connected: true,
+        isTagged: p.isTagged || false
+      };
+    });
     cachedLobbyPlayers = formattedPlayers;
+
+    // Always sync into currentRoomData.players
+    if (!currentRoomData) currentRoomData = { players: [] };
+    if (!currentRoomData.players) currentRoomData.players = [];
+
+    formattedPlayers.forEach((fp) => {
+      const existing = currentRoomData.players.find((p) => p.id === fp.id);
+      if (existing) {
+        Object.assign(existing, fp);
+      } else {
+        currentRoomData.players.push(fp);
+      }
+    });
+
     if (!currentRoomData?.state || currentRoomData.state === 'LOBBY') {
       updateLobbyUI({ players: formattedPlayers });
     }
+
+    // Always recompute runners alive count on presence change
+    updateRunnersAliveCount();
   }
 
   // --- LOCATION PERMISSION SYSTEM ---
@@ -650,7 +715,7 @@
   });
 
   // --- JOIN ROOM ---
-  document.getElementById('btn-confirm-join').addEventListener('click', () => {
+  document.getElementById('btn-confirm-join').addEventListener('click', async () => {
     window.soundEngine?.playClick();
     const name = validatePlayerName() || 'Operative ' + Math.floor(Math.random() * 90 + 10);
     const code = document.getElementById('join-code-input').value.trim().toUpperCase();
@@ -670,10 +735,18 @@
         })
       );
     } else {
+      // Query room state from Supabase database if available
+      const dbRoom = await window.supabaseGameManager.getRoomFromDb(code);
+      if (dbRoom) {
+        currentRoomData = Object.assign(currentRoomData || {}, dbRoom);
+        if (dbRoom.config) currentRoomConfig = Object.assign(currentRoomConfig, dbRoom.config);
+      }
+
       handleServerMessage({
         type: 'ROOM_JOINED',
         roomCode: code,
-        playerId: myPlayerId
+        playerId: myPlayerId,
+        roomState: dbRoom
       });
     }
   });
@@ -1154,10 +1227,104 @@
   }
 
   function updateRunnersAliveCount() {
-    if (!currentRoomData?.players) return;
-    const runners = currentRoomData.players.filter((p) => p.assignedRole === 'runner');
+    if (!currentRoomData) {
+      currentRoomData = { players: [] };
+    }
+    if (!currentRoomData.players) {
+      currentRoomData.players = [];
+    }
+
+    const allPlayersMap = new Map();
+
+    // 1. Ingest from currentRoomData.players
+    currentRoomData.players.forEach((p) => {
+      if (p && p.id) allPlayersMap.set(p.id, { ...p });
+    });
+
+    // 2. Ingest from cached presence players
+    (cachedLobbyPlayers || []).forEach((p) => {
+      if (p && p.id) {
+        if (!allPlayersMap.has(p.id)) {
+          allPlayersMap.set(p.id, { ...p });
+        } else {
+          const prev = allPlayersMap.get(p.id);
+          allPlayersMap.set(p.id, { ...prev, ...p });
+        }
+      }
+    });
+
+    // 3. Register self with accurate role
+    const myName = document.getElementById('player-name-input').value.trim() || 'Operative';
+    const amHunter = myAssignedRole === 'hunter' || currentRole === 'hunter' || (isHost && !myAssignedRole);
+    const mySelfRole = amHunter ? 'hunter' : 'runner';
+    if (!myAssignedRole) {
+      myAssignedRole = mySelfRole;
+    }
+
+    if (!allPlayersMap.has(myPlayerId)) {
+      allPlayersMap.set(myPlayerId, {
+        id: myPlayerId,
+        name: myName,
+        assignedRole: mySelfRole,
+        rolePreference: mySelfRole,
+        role: mySelfRole,
+        isTagged: false
+      });
+    } else {
+      const me = allPlayersMap.get(myPlayerId);
+      me.assignedRole = me.assignedRole || mySelfRole;
+      me.role = me.role || mySelfRole;
+    }
+
+    // 4. Role inference: If local user is Hunter, any OTHER connected operative who is not explicitly a hunter is a RUNNER
+    if (amHunter) {
+      allPlayersMap.forEach((p, pid) => {
+        if (pid !== myPlayerId) {
+          const r = (p.assignedRole || p.rolePreference || p.role || '').toLowerCase();
+          if (r !== 'hunter') {
+            p.assignedRole = 'runner';
+            p.role = 'runner';
+          }
+        }
+      });
+    }
+
+    // 5. In a 2-player match, if one player is hunter, the other must be runner
+    if (allPlayersMap.size === 2) {
+      const pList = Array.from(allPlayersMap.values());
+      const hunterPlayer = pList.find((p) => (p.assignedRole || p.rolePreference || p.role) === 'hunter');
+      if (hunterPlayer) {
+        pList.forEach((p) => {
+          if (p.id !== hunterPlayer.id) {
+            p.assignedRole = 'runner';
+            p.role = 'runner';
+          }
+        });
+      }
+    }
+
+    const playersList = Array.from(allPlayersMap.values());
+    currentRoomData.players = playersList;
+
+    // Filter runners (anyone whose assignedRole, role, or rolePreference is 'runner')
+    let runners = playersList.filter((p) => {
+      const role = (p.assignedRole || p.rolePreference || p.role || '').toLowerCase();
+      return role === 'runner';
+    });
+
+    // If local player is a runner, ensure we have at least 1 runner (ourselves)
+    if (!amHunter && runners.length === 0) {
+      const selfObj = allPlayersMap.get(myPlayerId);
+      if (selfObj) runners.push(selfObj);
+    }
+
     const alive = runners.filter((p) => !p.isTagged).length;
-    document.getElementById('hud-runners-alive').textContent = `${alive} of ${runners.length}`;
+    const total = runners.length;
+
+    const countEl = document.getElementById('hud-runners-alive');
+    if (countEl) {
+      countEl.textContent = `${alive} of ${total}`;
+    }
   }
 
   // Ping Event Handling
@@ -1165,8 +1332,36 @@
     window.soundEngine?.playPing();
     if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
 
-    const isHunter = myAssignedRole === 'hunter';
+    const isHunter = myAssignedRole === 'hunter' || currentRole === 'hunter';
     const pings = msg.ping?.runnerPings || msg.runnerPings || [];
+
+    // Register pinging runners directly into active roster
+    if (!currentRoomData) currentRoomData = { players: [] };
+    if (!currentRoomData.players) currentRoomData.players = [];
+
+    pings.forEach((p) => {
+      const existing = currentRoomData.players.find((pl) => pl.id === p.id);
+      if (existing) {
+        existing.assignedRole = 'runner';
+        existing.role = 'runner';
+        existing.name = p.name || existing.name || 'Runner';
+        existing.lat = p.lat;
+        existing.lng = p.lng;
+      } else {
+        currentRoomData.players.push({
+          id: p.id,
+          name: p.name || 'Runner',
+          assignedRole: 'runner',
+          role: 'runner',
+          rolePreference: 'runner',
+          isTagged: false,
+          lat: p.lat,
+          lng: p.lng
+        });
+      }
+    });
+
+    updateRunnersAliveCount();
 
     runnerPingMarkers.forEach((m) => gameMap?.removeLayer(m));
     runnerPingMarkers.clear();
@@ -1191,9 +1386,11 @@
       });
     } else {
       const alert = document.getElementById('boundary-alert');
-      alert.style.borderColor = 'var(--brass)';
-      alert.style.display = 'block';
-      setTimeout(() => (alert.style.display = 'none'), 1200);
+      if (alert) {
+        alert.style.borderColor = 'var(--brass)';
+        alert.style.display = 'block';
+        setTimeout(() => (alert.style.display = 'none'), 1200);
+      }
     }
   }
 
@@ -1226,7 +1423,26 @@
     window.soundEngine?.playTagAlarm();
     if (navigator.vibrate) navigator.vibrate([400, 200, 400]);
 
-    alert(`🎯 TAGGED! ${msg.runnerName} was tagged by ${msg.hunterName}!`);
+    const targetId = msg.runnerId;
+    if (currentRoomData?.players) {
+      const p = currentRoomData.players.find((pl) => pl.id === targetId);
+      if (p) p.isTagged = true;
+    }
+    if (cachedLobbyPlayers) {
+      const p = cachedLobbyPlayers.find((pl) => pl.id === targetId);
+      if (p) p.isTagged = true;
+    }
+
+    const rName = msg.runnerName || 'A Runner';
+    const hName = msg.hunterName || 'A Hunter';
+
+    const boundaryAlert = document.getElementById('boundary-alert');
+    if (boundaryAlert) {
+      boundaryAlert.textContent = `🎯 TAGGED! ${rName} was caught by ${hName}!`;
+      boundaryAlert.style.borderColor = 'var(--crimson)';
+      boundaryAlert.style.display = 'block';
+      setTimeout(() => (boundaryAlert.style.display = 'none'), 4000);
+    }
 
     if (msg.runnerId === myPlayerId) {
       document.getElementById('hud-role-pill').textContent = 'SPECTATOR';
@@ -1235,6 +1451,14 @@
     }
 
     updateRunnersAliveCount();
+
+    // Check if all runners caught
+    if (currentRoomData?.players) {
+      const runners = currentRoomData.players.filter((p) => (p.assignedRole || p.rolePreference || p.role) === 'runner');
+      if (runners.length > 0 && runners.every((p) => p.isTagged)) {
+        handleGameOver({ winner: 'HUNTERS', stats: { durationSeconds: 180, totalPings: 1 } });
+      }
+    }
   }
 
   // Game Over Event
@@ -1425,12 +1649,18 @@
   // --- TAG ACTION DIALOGS ---
   document.getElementById('btn-tag-action').addEventListener('click', () => {
     window.soundEngine?.playClick();
-    const runners = (currentRoomData?.players || []).filter((p) => p.assignedRole === 'runner' && !p.isTagged);
+    updateRunnersAliveCount();
+
+    const runners = (currentRoomData?.players || []).filter((p) => {
+      const role = (p.assignedRole || p.rolePreference || p.role || '').toLowerCase();
+      return role === 'runner' && p.id !== myPlayerId && !p.isTagged;
+    });
+
     const container = document.getElementById('tag-runner-options');
     container.innerHTML = '';
 
     if (runners.length === 0) {
-      container.innerHTML = '<p style="color:var(--parchment-muted); font-size:13px;">No active runners left to tag!</p>';
+      container.innerHTML = '<p style="color:var(--parchment-muted); font-size:13px; padding: 12px 0;">No active runners detected in range to tag.</p>';
     } else {
       runners.forEach((r) => {
         const btn = document.createElement('button');
@@ -1440,7 +1670,8 @@
         btn.style.display = 'flex';
         btn.style.alignItems = 'center';
         btn.style.gap = '8px';
-        btn.innerHTML = `<svg class="custom-emoticon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="var(--crimson)"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg> <span>Tag ${r.name}</span>`;
+        btn.style.marginBottom = '8px';
+        btn.innerHTML = `<svg class="custom-emoticon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="var(--crimson)"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg> <span>Tag <b>${escapeHtml(r.name || 'Runner')}</b></span>`;
         btn.addEventListener('click', () => {
           document.getElementById('tag-modal').classList.remove('active');
           if (ws && ws.readyState === WebSocket.OPEN) {
@@ -1448,7 +1679,8 @@
           }
           window.supabaseGameManager.broadcastEvent('player_tagged', {
             runnerId: r.id,
-            runnerName: r.name,
+            targetRunnerId: r.id,
+            runnerName: r.name || 'Runner',
             hunterName: document.getElementById('player-name-input').value.trim() || 'Hunter'
           });
         });

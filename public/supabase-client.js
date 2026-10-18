@@ -209,6 +209,32 @@ class SupabaseGameManager {
       console.warn('Database save room error (continuing with realtime):', e);
     }
   }
+
+  async getRoomFromDb(code) {
+    if (!this.client || !code) return null;
+    try {
+      const { data, error } = await this.client
+        .from('rooms')
+        .select('*')
+        .eq('code', code.toUpperCase())
+        .maybeSingle();
+
+      if (error || !data) return null;
+      return {
+        code: data.code,
+        hostId: data.host_id,
+        state: data.state,
+        timeRemaining: data.time_remaining,
+        config: {
+          arena: data.arena,
+          ...(data.settings || {})
+        }
+      };
+    } catch (e) {
+      console.warn('Database get room error:', e);
+      return null;
+    }
+  }
 }
 
 window.supabaseGameManager = new SupabaseGameManager();
