@@ -83,17 +83,6 @@
             <path d="M15 2v6l2-1.2 2 1.2V2" fill="var(--crimson)" stroke="none"/>
           </svg>
         </button>
-        <button id="btn-open-ascii-terminal" class="icon-button custom-emoticon-btn" title="Interactive CRT Tactical Radar Terminal">
-          <svg class="custom-emoticon" viewBox="0 0 24 24" fill="none">
-            <rect x="2" y="3" width="20" height="15" rx="3" fill="rgba(106,98,28,0.15)" stroke="var(--parchment)" stroke-width="1.8"/>
-            <circle cx="12" cy="10.5" r="4.5" stroke="var(--brass)" stroke-dasharray="2 2" stroke-width="1.4"/>
-            <line x1="12" y1="6" x2="12" y2="15" stroke="rgba(249,232,172,0.4)" stroke-width="1.2"/>
-            <line x1="7.5" y1="10.5" x2="16.5" y2="10.5" stroke="rgba(249,232,172,0.4)" stroke-width="1.2"/>
-            <line x1="12" y1="10.5" x2="15.5" y2="7.5" stroke="var(--crimson)" stroke-width="2" stroke-linecap="round"/>
-            <circle cx="12" cy="10.5" r="1.5" fill="var(--crimson)"/>
-            <path d="M8 21h8M12 18v3" stroke="var(--parchment)" stroke-width="1.8" stroke-linecap="round"/>
-          </svg>
-        </button>
         <button id="btn-open-settings" class="icon-button custom-emoticon-btn" title="Encrypted Database & Supabase Settings">
           <svg class="custom-emoticon" viewBox="0 0 24 24" fill="none">
             <circle cx="12" cy="12" r="3.2" fill="rgba(145,41,37,0.35)" stroke="var(--crimson)" stroke-width="1.8"/>
@@ -117,15 +106,6 @@
       <span class="eyebrow-badge">TACTICAL GPS GAME • 1v1 OR MULTIPLAYER</span>
       <h2 class="hero-title">Runners hide.<br>Hunters chase.</h2>
       <p class="hero-subtitle">The phone acts as your referee. Drop a boundary zone over your city or park, choose your team, and stay on foot. Every second counts.</p>
-    </div>
-
-    <!-- Interactive ASCII Tactical Runner Widget -->
-    <div class="ascii-hero-widget" id="ascii-hero-widget" title="Click to launch Interactive ASCII Terminal">
-      <div class="ascii-widget-header">
-        <span class="ascii-widget-tag"><span class="pulse-green-dot"></span> TACTICAL ASCII RADAR</span>
-        <span class="ascii-widget-action">OPEN CRT <svg class="custom-emoticon-inline" viewBox="0 0 24 24" fill="none"><rect x="2" y="3" width="20" height="15" rx="3" stroke="var(--parchment)" stroke-width="1.8"/><circle cx="12" cy="10.5" r="4.5" stroke="var(--brass)" stroke-dasharray="2 2" stroke-width="1.4"/><line x1="12" y1="10.5" x2="15.5" y2="7.5" stroke="var(--crimson)" stroke-width="2"/></svg></span>
-      </div>
-      <pre id="landing-ascii-runner" class="landing-ascii-display"></pre>
     </div>
 
     <!-- Compulsory Codename Entry -->
@@ -480,14 +460,6 @@
             <span id="chat-unread-badge" class="chat-badge" style="display: none;">0</span>
           </button>
 
-          <button id="btn-hud-ascii" class="hud-pill icon-btn-hud custom-emoticon-btn" title="Tactical ASCII Radar">
-            <svg class="custom-emoticon" viewBox="0 0 24 24" fill="none">
-              <rect x="2" y="3" width="20" height="15" rx="3" stroke="var(--parchment)" stroke-width="1.8" fill="rgba(106,98,28,0.2)"/>
-              <circle cx="12" cy="10.5" r="4.5" stroke="var(--brass)" stroke-dasharray="2 2" stroke-width="1.4"/>
-              <line x1="12" y1="10.5" x2="15.5" y2="7.5" stroke="var(--crimson)" stroke-width="2"/>
-            </svg>
-          </button>
-
           <button id="btn-hud-help" class="hud-pill icon-btn-hud custom-emoticon-btn" title="Rules & Tutorial">
             <svg class="custom-emoticon" viewBox="0 0 24 24" fill="none">
               <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z" fill="rgba(249,232,172,0.12)" stroke="var(--parchment)" stroke-width="1.8"/>
@@ -621,64 +593,6 @@
     <div style="position: relative; max-width: 90vw; max-height: 85vh; display: flex; flex-direction: column; align-items: center;">
       <img id="lightbox-full-img" src="" alt="Enlarged intel photo" style="max-width: 100%; max-height: 80vh; border-radius: 8px; border: 2px solid var(--parchment); object-fit: contain;">
       <button id="btn-close-lightbox" class="icon-button" style="position: absolute; top: -14px; right: -14px; background: var(--crimson); border-color: #fff; width: 34px; height: 34px; font-size: 14px;">✕</button>
-    </div>
-  </div>
-
-  <!-- MODAL: Interactive ASCII Radar & Tactical CRT Terminal -->
-  <div id="ascii-terminal-modal" class="modal-overlay" style="z-index: 3500;">
-    <div class="ascii-terminal-box">
-      <div class="ascii-terminal-header">
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <span class="crt-led-dot"></span>
-          <span class="ascii-title">RFYL // TACTICAL ASCII RADAR CRT-80</span>
-        </div>
-        <button id="btn-close-ascii" class="icon-button" style="width: 28px; height: 28px; font-size: 13px;">✕</button>
-      </div>
-
-      <!-- Scanline CRT Effect Container -->
-      <div class="crt-screen">
-        <div class="crt-scanlines"></div>
-        <div class="crt-glow-overlay"></div>
-
-        <!-- Animated ASCII Tactical Runner Banner -->
-        <pre id="ascii-runner-banner" class="ascii-runner-text"></pre>
-
-        <!-- Live ASCII Radar Grid (rotating beam, range rings, target blips) -->
-        <div class="ascii-radar-container">
-          <pre id="ascii-radar-display" class="ascii-radar-matrix"></pre>
-          <div class="ascii-telemetry-panel">
-            <div class="telemetry-row"><span>OPERATIVE:</span> <b id="ascii-op-name">GHOST</b></div>
-            <div class="telemetry-row"><span>ROLE:</span> <b id="ascii-op-role">HUNTER</b></div>
-            <div class="telemetry-row"><span>COORDS:</span> <span id="ascii-op-coords">37.7749° N, 122.4194° W</span></div>
-            <div class="telemetry-row"><span>RADAR SWEEP:</span> <span id="ascii-radar-sweep-deg">180°</span></div>
-            <div class="telemetry-row"><span>TARGETS:</span> <span id="ascii-targets-count">1 IN RANGE</span></div>
-            <div class="telemetry-row"><span>RADAR FREQ:</span> <span>1420.4 MHz</span></div>
-            <div class="telemetry-row"><span>STATUS:</span> <span style="color:#4ade80;">UPLINK ONLINE</span></div>
-          </div>
-        </div>
-
-        <!-- Terminal Output Log -->
-        <div id="ascii-terminal-log" class="ascii-log-window">
-          <div class="log-line sys">-- SATELLITE RADAR SYNCHRONIZED --</div>
-          <div class="log-line sys">Type "scan", "ping", "sprint", or "status" below.</div>
-        </div>
-
-        <!-- Quick Interactive Action Chips -->
-        <div class="ascii-quick-chips">
-          <button class="ascii-chip" data-cmd="scan">📡 SCAN SWEEP</button>
-          <button class="ascii-chip" data-cmd="ping">⚡ SONAR BURST</button>
-          <button class="ascii-chip" data-cmd="sprint">🏃 ASCII SPRINT</button>
-          <button class="ascii-chip" data-cmd="status">📊 TELEMETRY</button>
-          <button class="ascii-chip" data-cmd="help">❓ HELP</button>
-        </div>
-
-        <!-- Interactive Command Line -->
-        <div class="ascii-cmd-bar">
-          <span class="ascii-prompt">&gt;</span>
-          <input type="text" id="ascii-cmd-input" class="ascii-input" placeholder="Enter command (e.g. scan, ping, sprint)..." autocomplete="off" spellcheck="false">
-          <button id="btn-exec-ascii-cmd" class="ascii-send-btn">EXEC</button>
-        </div>
-      </div>
     </div>
   </div>
 
