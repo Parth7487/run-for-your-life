@@ -23,10 +23,48 @@
   <!-- Boundary Flash Warning (Appears when runner leaves zone) -->
   <div id="boundary-alert" class="boundary-warning"></div>
 
+  <!-- Fullscreen Out of Bounds 60s Red Alert Overlay -->
+  <div id="out-of-bounds-overlay" class="oob-fullscreen-overlay" style="display: none;">
+    <div class="oob-warning-card">
+      <div class="oob-beacon-icon">🚨</div>
+      <h2 class="oob-title">PERIMETER BREACH!</h2>
+      <p class="oob-desc">You are outside the safe arena zone. Return inside immediately!</p>
+      <div class="oob-timer-box">
+        <span class="oob-timer-label">ELIMINATION IN</span>
+        <span id="oob-timer-val" class="oob-timer-val">60s</span>
+        <div class="oob-progress-track">
+          <div id="oob-progress-fill" class="oob-progress-fill"></div>
+        </div>
+      </div>
+      <p class="oob-note">If time expires, you will be eliminated & infected by the toxic wasteland.</p>
+    </div>
+  </div>
+
   <!-- Disconnect Buffer Notification Bar (Top Floating) -->
   <div id="disconnect-buffer-banner" class="disconnect-buffer-banner" style="display: none;">
     <span class="pulse-warning-dot"></span>
     <span id="disconnect-buffer-text">⚠️ OPERATIVE DISCONNECTED • 90s BUFFER ACTIVE</span>
+  </div>
+
+  <!-- 15-Meter Zombie Proximity Sonar Beep Warning Banner -->
+  <div id="proximity-warning-banner" class="proximity-warning-banner" style="display: none;">
+    <span class="proximity-sonar-icon">🚨</span>
+    <span id="proximity-warning-text">⚠️ ZOMBIE DETECTED WITHIN 15M! RUN!</span>
+  </div>
+
+  <!-- Cross-Device Global Infection Broadcast Banner -->
+  <div id="cross-device-infection-banner" class="cross-device-infection-banner" style="display: none;">
+    <span class="cross-infection-icon">☣️</span>
+    <div class="cross-infection-body">
+      <div class="cross-infection-title">OPERATIVE INFECTED!</div>
+      <div id="cross-infection-detail" class="cross-infection-detail">Operative turned into a ZOMBIE!</div>
+    </div>
+  </div>
+
+  <!-- Tactical Toast Feedback -->
+  <div id="tactical-toast" class="tactical-toast" style="display: none;">
+    <span id="tactical-toast-icon">📍</span>
+    <span id="tactical-toast-msg">GPS Refreshed & Radar Synchronized!</span>
   </div>
 
   <!-- 1. DRAMATIC PRELOADER SCREEN (Takobe Art & Animated Running Logo) -->
@@ -59,62 +97,80 @@
   <!-- 2. LANDING SCREEN -->
   <section id="screen-landing" class="screen">
     <header class="app-header luxury-brand-header">
-      <div class="brand-badge" id="brand-home-link">
-        <div class="brand-mascot-tile" title="RUN FOR YOUR LIFE • Tactical Noir Edition">
-          <img src="assets/brand-bust-mascot.svg" alt="Operative Mascot" class="brand-mascot-img">
+      <div class="header-main-row">
+        <div class="brand-badge" id="brand-home-link">
+          <div class="brand-mascot-tile" title="RUN FOR YOUR LIFE • Tactical Edition">
+            <img src="assets/app_icon.png" alt="Run for Your Life" class="brand-mascot-img">
+          </div>
+          <div class="brand-text-lockup">
+            <div class="brand-title-row">
+              <span class="brand-main-name">RUN FOR YOUR LIFE</span>
+              <span class="brand-edition-pill">TACTICAL</span>
+            </div>
+            <div class="brand-status-subline">
+              <span class="pulse-beacon-dot"></span>
+              <span class="brand-sub-badge">TACTICAL RADAR · GPS UPLINK</span>
+            </div>
+          </div>
         </div>
-        <div class="brand-text-lockup">
-          <div class="brand-title-row">
-            <span class="brand-main-name">RUN FOR YOUR LIFE</span>
-            <span class="brand-edition-pill">NOIR</span>
-          </div>
-          <div class="brand-status-subline">
-            <span class="pulse-beacon-dot"></span>
-            <span class="brand-sub-badge">TACTICAL RADAR · GPS UPLINK</span>
-          </div>
+        <div class="header-actions">
+          <button id="btn-open-tutorial" class="icon-button custom-emoticon-btn" title="Field Manual & Game Rules">
+            <svg class="custom-emoticon" viewBox="0 0 24 24" fill="none">
+              <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z" fill="rgba(255,255,255,0.08)" stroke="currentColor" stroke-width="1.8"/>
+              <path d="M6 2v20" stroke="currentColor" stroke-width="1.8"/>
+              <path d="M10 7h7M10 11h7M10 15h4" stroke="var(--runner-gold)" stroke-width="1.8" stroke-linecap="round"/>
+              <path d="M15 2v6l2-1.2 2 1.2V2" fill="var(--brand-red)" stroke="none"/>
+            </svg>
+          </button>
+          <button id="btn-open-settings" class="icon-button custom-emoticon-btn" title="System Settings & Diagnostics">
+            <svg class="custom-emoticon" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="3.2" fill="rgba(236,48,19,0.35)" stroke="var(--brand-red)" stroke-width="1.8"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <button id="sound-btn" class="icon-button custom-emoticon-btn" title="Toggle Tactical Audio">
+            <svg class="custom-emoticon" viewBox="0 0 24 24" fill="none">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="rgba(255,255,255,0.1)" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+              <g class="sound-waves">
+                <path d="M15.5 8.5a5 5 0 0 1 0 7" stroke="var(--runner-gold)" stroke-width="2" stroke-linecap="round"/>
+                <path d="M19 5a9.5 9.5 0 0 1 0 14" stroke="var(--brand-red)" stroke-width="2" stroke-linecap="round"/>
+              </g>
+              <line class="sound-slash" x1="2" y1="2" x2="22" y2="22" stroke="var(--brand-red)" stroke-width="2.5" stroke-linecap="round" style="display: none;"/>
+            </svg>
+          </button>
         </div>
       </div>
-      <div class="header-actions">
-        <button id="btn-open-tutorial" class="icon-button custom-emoticon-btn" title="Field Manual & Game Rules">
-          <svg class="custom-emoticon" viewBox="0 0 24 24" fill="none">
-            <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z" fill="rgba(249,232,172,0.12)" stroke="var(--parchment)" stroke-width="1.8"/>
-            <path d="M6 2v20" stroke="var(--parchment)" stroke-width="1.8"/>
-            <path d="M10 7h7M10 11h7M10 15h4" stroke="var(--brass)" stroke-width="1.8" stroke-linecap="round"/>
-            <path d="M15 2v6l2-1.2 2 1.2V2" fill="var(--crimson)" stroke="none"/>
-          </svg>
-        </button>
-        <button id="btn-open-settings" class="icon-button custom-emoticon-btn" title="Encrypted Database & Supabase Settings">
-          <svg class="custom-emoticon" viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="12" r="3.2" fill="rgba(145,41,37,0.35)" stroke="var(--crimson)" stroke-width="1.8"/>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" stroke="var(--parchment)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </button>
-        <button id="sound-btn" class="icon-button custom-emoticon-btn" title="Toggle Tactical Audio">
-          <svg class="custom-emoticon" viewBox="0 0 24 24" fill="none">
-            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="rgba(249,232,172,0.15)" stroke="var(--parchment)" stroke-width="1.8" stroke-linejoin="round"/>
-            <g class="sound-waves">
-              <path d="M15.5 8.5a5 5 0 0 1 0 7" stroke="var(--brass)" stroke-width="2" stroke-linecap="round"/>
-              <path d="M19 5a9.5 9.5 0 0 1 0 14" stroke="var(--crimson)" stroke-width="2" stroke-linecap="round"/>
-            </g>
-            <line class="sound-slash" x1="2" y1="2" x2="22" y2="22" stroke="var(--crimson)" stroke-width="2.5" stroke-linecap="round" style="display: none;"/>
-          </svg>
-        </button>
+
+      <!-- Sensor Status Badges (PlayCulture Style) -->
+      <div class="sensor-status-dock" id="sensor-status-dock" title="Hardware Sensors & Tactical Uplink">
+        <button class="sensor-pill" id="pill-net" title="Network Connection"><span class="pill-dot green"></span>NET</button>
+        <button class="sensor-pill" id="pill-gps" title="GPS Location"><span class="pill-dot red"></span>GPS</button>
+        <button class="sensor-pill" id="pill-ble" title="Bluetooth Proximity"><span class="pill-dot red"></span>BLE</button>
+        <button class="sensor-pill" id="pill-cam" title="Optic Camera"><span class="pill-dot red"></span>CAM</button>
       </div>
     </header>
 
     <div class="hero-section">
-      <span class="eyebrow-badge">TACTICAL GPS GAME • 1v1 OR MULTIPLAYER</span>
-      <h2 class="hero-title">Runners hide.<br>Hunters chase.</h2>
+      <div class="hero-badge-wrap">
+        <span class="eyebrow-badge">TACTICAL GPS GAME • 1v1 OR SQUAD BATTLE</span>
+        <span class="live-pulse-badge"><span class="pulse-dot-mini"></span> LIVE RADAR</span>
+      </div>
+      <h2 class="hero-title">Survivors hide.<br>Zombies hunt.</h2>
       <p class="hero-subtitle">The phone acts as your referee. Drop a boundary zone over your city or park, choose your team, and stay on foot. Every second counts.</p>
     </div>
 
-    <!-- Compulsory Codename Entry -->
-    <div class="input-group">
+    <!-- Compulsory Codename Entry with Randomizer Dice -->
+    <div class="input-group operative-codename-group">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
         <label class="input-label" for="player-name-input" style="margin: 0;">OPERATIVE CODENAME *</label>
-        <span class="compulsory-tag">COMPULSORY</span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <button type="button" id="btn-random-name" class="btn-dice-random" title="Generate Random Tactical Codename">🎲 RANDOM</button>
+          <span class="compulsory-tag">COMPULSORY</span>
+        </div>
       </div>
-      <input type="text" id="player-name-input" class="text-input" placeholder="e.g. Phantom, Vesper, Nomad" maxlength="16" autocomplete="nickname">
+      <div class="codename-input-wrap">
+        <input type="text" id="player-name-input" class="text-input" placeholder="e.g. Phantom, Vesper, Nomad" maxlength="16" autocomplete="nickname">
+      </div>
       <span id="name-validation-msg" class="validation-error-msg" style="display: none;">⚠️ Codename is compulsory to initialize tactical uplink!</span>
     </div>
 
@@ -124,7 +180,7 @@
           <span class="card-title">Host Arena</span>
           <span class="card-arrow">→</span>
         </div>
-        <span class="card-desc">Set boundary zone, select Hunter & Runner ping intervals, and invite friends.</span>
+        <span class="card-desc">Set boundary zone, select starting zombies count, and invite friends.</span>
       </button>
 
       <button id="btn-open-join" class="action-card">
@@ -134,23 +190,35 @@
         </div>
         <span class="card-desc">Enter 6-letter room code (or reconnect automatically within 90-sec grace buffer).</span>
       </button>
-    </div>
 
-    <!-- Interactive Animated Tutorial & Rules Card -->
-    <button id="btn-open-tutorial-card" class="action-card tutorial-action-card">
-      <div class="card-header-row">
-        <span class="card-title" style="display: flex; align-items: center; gap: 10px;">
-          <svg class="custom-emoticon-inline" viewBox="0 0 24 24" fill="none" style="width: 20px; height: 20px;">
-            <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z" fill="rgba(249,232,172,0.12)" stroke="var(--parchment)" stroke-width="1.8"/>
-            <path d="M6 2v20" stroke="var(--parchment)" stroke-width="1.8"/>
-            <path d="M15 2v6l2-1.2 2 1.2V2" fill="var(--crimson)"/>
-          </svg>
-          Field Manual & Rules
-        </span>
-        <span class="tutorial-badge-pulse">ANIMATED TUTORIAL</span>
-      </div>
-      <span class="card-desc">Interactive visual walkthrough of the hunting radar, scatter phase, geofence, and 1v1 duel rules.</span>
-    </button>
+      <!-- Hardware & Services Diagnostics Card (PlayCulture Style) -->
+      <button id="btn-open-services" class="action-card services-action-card">
+        <div class="card-header-row">
+          <span class="card-title" style="display: flex; align-items: center; gap: 8px;">
+            <span class="services-badge-icon">⚡</span>
+            System Hardware & Services
+          </span>
+          <span class="services-status-pill" id="landing-services-status">CHECK SENSORS</span>
+        </div>
+        <span class="card-desc">Verify real-time status for GPS Geofence, Bluetooth Proximity, Network Uplink, and Camera. Tap to manage permissions.</span>
+      </button>
+
+      <!-- Official Field Manual & Game Rules Card -->
+      <button id="btn-open-tutorial-card" class="action-card tutorial-action-card">
+        <div class="card-header-row">
+          <span class="card-title" style="display: flex; align-items: center; gap: 10px;">
+            <svg class="custom-emoticon-inline" viewBox="0 0 24 24" fill="none" style="width: 20px; height: 20px;">
+              <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z" fill="rgba(255,255,255,0.08)" stroke="currentColor" stroke-width="1.8"/>
+              <path d="M6 2v20" stroke="currentColor" stroke-width="1.8"/>
+              <path d="M15 2v6l2-1.2 2 1.2V2" fill="var(--brand-red)"/>
+            </svg>
+            Field Manual & Game Rules
+          </span>
+          <span class="tutorial-badge-pulse" style="background: rgba(16, 185, 129, 0.2); border-color: #10b981; color: #10b981;">OFFICIAL RULES</span>
+        </div>
+        <span class="card-desc">Complete tactical rulebook: Zombies vs Survivors, 5m chase infection, 15m sonar beep warning, 60s boundary rule, and map zones.</span>
+      </button>
+    </div>
 
     <footer class="app-footer">
       <p class="footer-credit">Designed and developed by <b>Shopifydevstudio</b></p>
@@ -214,43 +282,16 @@
       </div>
     </div>
 
-    <!-- Individual Location Update / Ping Selectors for Hunter & Runner -->
-    <div class="tactical-options-box">
-      <div class="tactical-box-header">
-        <span class="input-label" style="color: var(--parchment); margin: 0;">📡 Live Location Update Intervals</span>
-        <span class="badge-tag">CUSTOMIZABLE</span>
+    <!-- Initial Zombies Count for Host Setup -->
+    <div class="input-group">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <span class="input-label" style="color: var(--brand-red); margin: 0;">Initial Zombies Count</span>
+        <b id="setup-zombies-display" style="color: var(--brand-red); font-family: var(--font-mono); font-size: 15px;">1 Zombie</b>
       </div>
-      <p style="font-size: 11px; color: var(--parchment-muted); margin-bottom: 12px; line-height: 1.4;">
-        Select independent update intervals (20s–80s) for Hunters and Runners:
+      <input type="range" id="setup-zombies-slider" min="1" max="10" step="1" value="1" style="width: 100%; accent-color: var(--brand-red); height: 6px; cursor: pointer;">
+      <p style="font-size: 11px; color: var(--parchment-muted); margin-top: 6px; line-height: 1.4;">
+        Operatives are randomly selected as Zombies when the match begins. The rest must run as Survivors.
       </p>
-
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-        <div>
-          <label class="input-label" style="color: #60a5fa;">Hunter Location Ping</label>
-          <select id="hunter-ping-interval-select" class="text-input" style="padding: 12px 14px; border-color: rgba(59, 130, 246, 0.4);">
-            <option value="20" selected>20 sec (Fast)</option>
-            <option value="30">30 sec</option>
-            <option value="40">40 sec</option>
-            <option value="50">50 sec</option>
-            <option value="60">60 sec</option>
-            <option value="70">70 sec</option>
-            <option value="80">80 sec</option>
-          </select>
-        </div>
-
-        <div>
-          <label class="input-label" style="color: var(--brass);">Runner Location Ping</label>
-          <select id="runner-ping-interval-select" class="text-input" style="padding: 12px 14px; border-color: rgba(249, 232, 172, 0.4);">
-            <option value="20">20 sec</option>
-            <option value="30">30 sec</option>
-            <option value="40">40 sec</option>
-            <option value="50" selected>50 sec (Tactical)</option>
-            <option value="60">60 sec</option>
-            <option value="70">70 sec</option>
-            <option value="80">80 sec</option>
-          </select>
-        </div>
-      </div>
     </div>
 
     <button id="btn-confirm-create-room" class="btn btn-primary" style="margin-top: 14px;">Create Lobby</button>
@@ -290,7 +331,16 @@
       <div class="code-digit"></div>
     </div>
 
-    <input type="text" id="join-code-input" class="text-input" placeholder="e.g. K7Q2FX" maxlength="6" style="text-transform: uppercase; font-family: var(--font-mono); text-align: center; letter-spacing: 0.25em; font-size: 24px; margin-bottom: 24px;">
+    <input type="text" id="join-code-input" class="text-input" placeholder="e.g. K7Q2FX" maxlength="6" style="text-transform: uppercase; font-family: var(--font-mono); text-align: center; letter-spacing: 0.25em; font-size: 24px; margin-bottom: 16px;">
+
+    <!-- Operative Codename for Join Screen -->
+    <div class="input-group" style="margin-bottom: 20px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+        <label class="input-label" for="join-player-name-input" style="margin: 0;">OPERATIVE CODENAME</label>
+        <span class="compulsory-tag" style="background: rgba(249, 232, 172, 0.15); color: var(--parchment); font-size: 10px; padding: 2px 6px; border-radius: 4px;">OPTIONAL</span>
+      </div>
+      <input type="text" id="join-player-name-input" class="text-input" placeholder="e.g. Phantom, Vesper, Nomad" maxlength="16" autocomplete="nickname">
+    </div>
 
     <button id="btn-confirm-join" class="btn btn-primary">Join Operation</button>
 
@@ -320,75 +370,33 @@
       </button>
     </header>
 
-    <!-- 2-Player 1v1 Indicator -->
-    <div id="lobby-2player-badge" class="duel-badge" style="display: none;">
-      <svg class="custom-emoticon-inline" viewBox="0 0 24 24" fill="none" stroke="var(--parchment)" stroke-width="2" style="width: 18px; height: 18px;">
-        <line x1="14.5" y1="17.5" x2="3" y2="6"/>
-        <path d="m14 19 2-2M20 20l-2-2M21 16l-3-3"/>
-        <line x1="9.5" y1="17.5" x2="21" y2="6"/>
-        <path d="m10 19-2-2M4 20l2-2M3 16l3-3"/>
-      </svg>
-      <span>2-PLAYER 1v1 DUEL READY (1 HUNTER VS 1 RUNNER)</span>
-    </div>
-
-    <!-- Role Selection -->
-    <span class="eyebrow-badge">Select Role Preference</span>
-    <div class="role-cards">
-      <div class="role-card" data-role="hunter">
-        <div class="custom-role-icon-box" style="margin-bottom: 6px;">
-          <svg viewBox="0 0 24 24" width="32" height="32" fill="none">
-            <circle cx="12" cy="12" r="10" stroke="#60a5fa" stroke-width="1.8" fill="rgba(59,130,246,0.15)"/>
-            <circle cx="12" cy="12" r="5" stroke="#60a5fa" stroke-width="1.4" stroke-dasharray="2 2"/>
-            <line x1="12" y1="2" x2="12" y2="6" stroke="#60a5fa" stroke-width="2"/>
-            <line x1="12" y1="18" x2="12" y2="22" stroke="#60a5fa" stroke-width="2"/>
-            <line x1="2" y1="12" x2="6" y2="12" stroke="#60a5fa" stroke-width="2"/>
-            <line x1="18" y1="12" x2="22" y2="12" stroke="#60a5fa" stroke-width="2"/>
-            <circle cx="12" cy="12" r="2" fill="#60a5fa"/>
-          </svg>
+    <!-- Initial Zombies Stepper (Host can adjust, Guests see count) -->
+    <div class="zombies-stepper-card" id="lobby-zombies-config">
+      <div class="zombies-stepper-header">
+        <span class="eyebrow-badge" style="background: var(--brand-red); margin: 0;">INITIAL ZOMBIES</span>
+        <span class="compulsory-tag" style="background: rgba(236, 48, 19, 0.2); color: var(--brand-red); font-size: 10px; padding: 2px 8px; border-radius: 4px; font-weight: 700;">100% RANDOM</span>
+      </div>
+      <p style="font-size: 12px; color: var(--parchment-muted); margin: 8px 0 12px; line-height: 1.4;">
+        When the host launches the match, <b id="zombies-count-text-highlight" style="color: var(--brand-red);">1 operative</b> will be randomly infected as Zombie. Remaining operatives must run as Survivors.
+      </p>
+      
+      <!-- Stepper Controls (Active for Host) -->
+      <div class="stepper-controls-row" id="host-zombies-stepper" style="display: flex; align-items: center; justify-content: center; gap: 16px; margin: 10px 0;">
+        <button type="button" id="btn-zombies-minus" class="stepper-action-btn" aria-label="Decrease zombies">−</button>
+        <div class="stepper-count-badge" style="display: flex; flex-direction: column; align-items: center; min-width: 60px;">
+          <span id="lobby-zombies-count-val" style="font-size: 28px; font-family: var(--font-display); font-weight: 800; color: #ec3013;">1</span>
+          <span style="font-size: 9px; font-family: var(--font-mono); color: var(--parchment-dim); letter-spacing: 0.12em;">ZOMBIES</span>
         </div>
-        <div class="role-title">Hunter</div>
-        <div class="role-desc">Track & tag runners</div>
+        <button type="button" id="btn-zombies-plus" class="stepper-action-btn" aria-label="Increase zombies">+</button>
       </div>
 
-      <div class="role-card" data-role="runner">
-        <div class="custom-role-icon-box" style="margin-bottom: 6px;">
-          <svg viewBox="0 0 24 24" width="32" height="32" fill="none">
-            <circle cx="12" cy="12" r="10" stroke="var(--brass)" stroke-width="1.8" fill="rgba(106,98,28,0.2)"/>
-            <circle cx="12" cy="7" r="2.5" fill="var(--parchment)"/>
-            <path d="M7 17l3-3 2 1 3-3" stroke="var(--parchment)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M12 9.5v4l-2 3.5" stroke="var(--parchment)" stroke-width="2" stroke-linecap="round"/>
-            <line x1="4" y1="10" x2="7" y2="10" stroke="var(--crimson)" stroke-width="1.5" stroke-linecap="round"/>
-            <line x1="3" y1="13" x2="6" y2="13" stroke="var(--crimson)" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="role-title">Runner</div>
-        <div class="role-desc">Evade & survive round</div>
+      <!-- Guest Readonly Indicator -->
+      <div id="guest-zombies-indicator" style="display: none; text-align: center; padding: 6px; font-family: var(--font-mono); font-size: 12px; color: var(--parchment-muted);">
+        Host selected: <b id="guest-zombies-val" style="color: #ec3013;">1</b> Zombie(s) (Random selection at launch)
       </div>
 
-      <div class="role-card selected" data-role="random">
-        <div class="custom-role-icon-box" style="margin-bottom: 6px;">
-          <svg viewBox="0 0 24 24" width="32" height="32" fill="none">
-            <rect x="4" y="4" width="16" height="16" rx="4" stroke="var(--parchment)" stroke-width="1.8" fill="rgba(249,232,172,0.08)"/>
-            <circle cx="8" cy="8" r="1.5" fill="var(--crimson)"/>
-            <circle cx="16" cy="8" r="1.5" fill="#60a5fa"/>
-            <circle cx="12" cy="12" r="1.5" fill="var(--brass)"/>
-            <circle cx="8" cy="16" r="1.5" fill="#60a5fa"/>
-            <circle cx="16" cy="16" r="1.5" fill="var(--crimson)"/>
-          </svg>
-        </div>
-        <div class="role-title">Random</div>
-        <div class="role-desc">System assigns fairly</div>
-      </div>
-    </div>
-
-    <div class="fairness-box">
-      <div class="fairness-bar">
-        <div id="fairness-hunter-bar" class="fairness-hunters" style="width: 50%;"></div>
-        <div id="fairness-runner-bar" class="fairness-runners" style="width: 50%;"></div>
-      </div>
-      <div class="fairness-text">
-        <span id="lobby-hunter-count">Hunters: 0</span>
-        <span id="lobby-runner-count">Runners: 0</span>
+      <div class="zombies-ratio-preview" id="zombies-ratio-preview" style="text-align: center; font-size: 11px; color: var(--parchment-dim); margin-top: 6px; font-family: var(--font-mono);">
+        🎲 1 Zombie • 0 Survivors
       </div>
     </div>
 
@@ -445,11 +453,39 @@
     <div class="game-hud-header luxury-tactical-hud">
       <div class="hud-top-bar">
         <div class="hud-pill hud-role-clock-group">
-          <span id="hud-role-pill" class="player-role-badge badge-hunter">HUNTER</span>
-          <span id="hud-game-clock" class="hud-time">45:00</span>
+          <span id="hud-role-pill" class="player-role-badge badge-survivor">SURVIVOR</span>
+          <span id="hud-game-clock" class="hud-time">30:00</span>
+        </div>
+
+        <!-- 2 Powerup Inventory Slots (Hidden to keep HUD clean and uncluttered) -->
+        <div class="hud-powerup-slots" id="hud-powerup-container" style="display: none;">
+          <button id="btn-powerup-slot-0" class="powerup-slot-card" title="Powerup Slot 1 (Tap to Activate)">
+            <span class="slot-idx">1</span>
+            <span id="slot-0-label" class="slot-label">EMPTY</span>
+          </button>
+          <button id="btn-powerup-slot-1" class="powerup-slot-card" title="Powerup Slot 2 (Tap to Activate)">
+            <span class="slot-idx">2</span>
+            <span id="slot-1-label" class="slot-label">EMPTY</span>
+          </button>
         </div>
 
         <div class="hud-actions-group">
+          <button id="btn-refresh-map" class="hud-pill icon-btn-hud custom-emoticon-btn" title="Refresh GPS & Radar Position">
+            <svg class="custom-emoticon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+            </svg>
+          </button>
+
+          <button id="btn-open-my-qr" class="hud-pill icon-btn-hud custom-emoticon-btn" title="My QR Tag & Callsign">
+            <svg class="custom-emoticon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="7" height="7"/>
+              <rect x="14" y="3" width="7" height="7"/>
+              <rect x="3" y="14" width="7" height="7"/>
+              <rect x="14" y="14" width="3" height="3"/>
+              <rect x="18" y="18" width="3" height="3"/>
+            </svg>
+          </button>
+
           <button id="btn-open-chat" class="hud-pill icon-btn-hud custom-emoticon-btn" title="Live Tactical Chat">
             <svg class="custom-emoticon" viewBox="0 0 24 24" fill="none">
               <path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5Z" fill="rgba(249,232,172,0.12)" stroke="var(--parchment)" stroke-width="1.8"/>
@@ -470,16 +506,40 @@
         </div>
       </div>
 
-      <!-- Sub-row: Dual Radar Ping Telemetry -->
+      <!-- Live Match Operatives Statistics Bar -->
+      <div class="hud-live-stats-bar" id="hud-live-stats-bar">
+        <div class="stat-cell stat-total-players" title="Total Operatives in Match">
+          <span class="stat-icon">👥</span>
+          <span class="stat-label">PLAYERS</span>
+          <span id="hud-stat-total-players" class="stat-num">--</span>
+        </div>
+        <div class="stat-cell stat-survivors-alive" title="Active Survivors Running">
+          <span class="stat-icon">🏃</span>
+          <span class="stat-label">SURVIVORS</span>
+          <span id="hud-stat-survivors-count" class="stat-num color-survivor">--</span>
+        </div>
+        <div class="stat-cell stat-zombies-active" title="Infected Zombies Hunting">
+          <span class="stat-icon">🧟</span>
+          <span class="stat-label">ZOMBIES</span>
+          <span id="hud-stat-zombies-count" class="stat-num color-zombie">--</span>
+        </div>
+        <div class="stat-cell stat-escaped-count" id="hud-stat-escaped-cell" style="display: none;" title="Evacuated Operatives">
+          <span class="stat-icon">🚁</span>
+          <span class="stat-label">ESCAPED</span>
+          <span id="hud-stat-escaped-count" class="stat-num color-escaped">0</span>
+        </div>
+      </div>
+
+      <!-- Sub-row: Zone Status & Stealth Telemetry -->
       <div class="hud-telemetry-row">
-        <div class="hud-telemetry-pill" title="Hunter Location Broadcast Rate">
-          <span class="hud-ping-label" style="color: #60a5fa;">H-PING</span>
-          <span id="hud-hunter-ping-clock" class="hud-ping-val" style="color: #60a5fa;">30s</span>
+        <div id="hud-zone-pill" class="hud-telemetry-pill" title="Current Location Sector">
+          <span class="hud-ping-label" style="color: var(--runner-gold);">SECTOR</span>
+          <span id="hud-zone-name" class="hud-ping-val">OPEN GROUND (DECAY ACTIVE)</span>
         </div>
         <div class="hud-telemetry-divider"></div>
-        <div class="hud-telemetry-pill" title="Runner Radar Ping Rate">
-          <span class="hud-ping-label" style="color: var(--parchment);">RUNNER RADAR</span>
-          <span id="hud-runner-ping-clock" class="hud-ping-val" style="color: var(--parchment);">50s</span>
+        <div id="hud-threat-pill" class="hud-telemetry-pill" title="Threat Telemetry">
+          <span class="hud-ping-label" style="color: var(--brand-red);">STATUS</span>
+          <span id="hud-threat-text" class="hud-ping-val">SURVIVING</span>
         </div>
       </div>
     </div>
@@ -487,33 +547,50 @@
     <!-- Fullscreen Tactical Map -->
     <div id="game-map" style="width: 100%; height: 100%;"></div>
 
-    <!-- Virtual Joystick for Testing / Indoor Simulation -->
-    <div id="joystick" class="joystick-container">
-      <div id="joystick-thumb" class="joystick-thumb"></div>
-      <span class="joystick-label">Virtual Move</span>
-    </div>
+    <!-- Floating Recenter / Refresh GPS Map Button -->
+    <button id="btn-map-recenter-gps" class="btn-map-recenter-gps" title="Recenter GPS & Refresh Radar">
+      <svg class="recenter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="7"/>
+        <line x1="12" y1="1" x2="12" y2="5"/>
+        <line x1="12" y1="19" x2="12" y2="23"/>
+        <line x1="1" y1="12" x2="5" y2="12"/>
+        <line x1="19" y1="12" x2="23" y2="12"/>
+        <circle cx="12" cy="12" r="2" fill="currentColor"/>
+      </svg>
+      <span class="recenter-text">REFRESH GPS</span>
+    </button>
+
+
 
     <!-- Bottom Action Controls -->
     <div class="game-hud-bottom">
       <div class="game-status-sheet">
         <div class="status-stat-group">
-          <span class="status-stat-label">RUNNERS REMAINING</span>
+          <span class="status-stat-label">SURVIVORS ALIVE</span>
           <div style="display: flex; align-items: baseline; gap: 10px; margin-top: 2px;">
             <span id="hud-runners-alive" class="status-stat-value" style="font-size: 22px;">-- / --</span>
-            <span class="status-live-beacon"><span class="pulse-beacon-dot"></span> LIVE HUNT</span>
+            <span id="hud-zombies-count-badge" class="status-live-beacon"><span class="pulse-beacon-dot"></span> <span id="hud-zombies-count">1</span> ZOMBIES</span>
           </div>
         </div>
       </div>
 
-      <!-- Tag Action Button for Hunter -->
-      <button id="btn-tag-action" class="btn btn-tag-action">
-        TAG A RUNNER
-      </button>
+      <!-- ZOMBIE ACTION: TAP TO INFECT (10s Burst / 40s Cooldown) -->
+      <div id="zombie-action-controls" style="display: none; width: 100%; flex-direction: column; gap: 10px;">
+        <button id="btn-zombie-infect-burst" class="btn btn-tag-action btn-infect-burst">
+          <span class="infect-icon">☣️</span>
+          <span id="infect-burst-label">TAP TO INFECT (10s BURST)</span>
+        </button>
+        <button id="btn-zombie-scan-victim" class="btn btn-secondary" style="border-color: var(--brand-red); color: var(--parchment);">
+          📷 SCAN VICTIM QR CODE
+        </button>
+      </div>
 
-      <!-- Self Tag Confirmation for Runner -->
-      <button id="btn-runner-tagged-action" class="btn btn-secondary" style="display: none; border-color: var(--crimson); color: var(--parchment);">
-        I'VE BEEN TAGGED
-      </button>
+      <!-- SURVIVOR ACTION: ADMIT DEFEAT / SCAN ZOMBIE -->
+      <div id="survivor-action-controls" style="display: flex; width: 100%; gap: 10px;">
+        <button id="btn-runner-tagged-action" class="btn btn-secondary" style="flex: 1; border-color: var(--crimson); color: var(--parchment);">
+          ⚠️ I'VE BEEN TAGGED (SCAN ZOMBIE)
+        </button>
+      </div>
     </div>
 
     <!-- Tactical Live Chat Drawer -->
@@ -563,24 +640,49 @@
   </section>
 
   <!-- 8. GAME OVER SCREEN -->
-  <section id="screen-game-over" class="screen">
-    <div style="text-align: center; margin: auto 0;">
+  <section id="screen-game-over" class="screen" style="overflow-y: auto; padding: 24px 16px;">
+    <div style="text-align: center; max-width: 480px; margin: 0 auto; width: 100%;">
       <span class="eyebrow-badge">MATCH TERMINATED</span>
-      <h1 id="game-over-winner-title" class="hero-title" style="font-size: 44px; color: var(--parchment); margin-bottom: 12px;">HUNTERS WON</h1>
-      <p id="game-over-reason" style="font-size: 15px; color: var(--parchment-muted); margin-bottom: 26px;">All runners were tagged before time expired.</p>
+      <h1 id="game-over-winner-title" class="hero-title" style="font-size: 32px; color: var(--parchment); margin-bottom: 8px;">HUNTERS WON</h1>
+      <p id="game-over-reason" style="font-size: 14px; color: var(--parchment-muted); margin-bottom: 20px;">All survivors were infected before time expired.</p>
 
-      <div style="background: var(--obsidian-surface); border: 1px solid var(--parchment-dim); border-radius: 14px; padding: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; text-align: left; margin-bottom: 26px;">
+      <!-- Match Stats Header Grid -->
+      <div style="background: var(--obsidian-surface); border: 1px solid var(--parchment-dim); border-radius: 12px; padding: 14px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; text-align: center; margin-bottom: 20px;">
         <div>
-          <span class="status-stat-label">Total Duration</span>
-          <div id="stat-match-duration" class="status-stat-value">45 min</div>
+          <span class="status-stat-label" style="font-size: 10px;">DURATION</span>
+          <div id="stat-match-duration" class="status-stat-value" style="font-size: 18px;">--:--</div>
         </div>
         <div>
-          <span class="status-stat-label">Radar Pings</span>
-          <div id="stat-match-pings" class="status-stat-value">9 pings</div>
+          <span class="status-stat-label" style="font-size: 10px;">ESCAPED</span>
+          <div id="stat-match-escaped" class="status-stat-value" style="font-size: 18px; color: #38bdf8;">0</div>
+        </div>
+        <div>
+          <span class="status-stat-label" style="font-size: 10px;">INFECTIONS</span>
+          <div id="stat-match-infections" class="status-stat-value" style="font-size: 18px; color: #ff3131;">0</div>
         </div>
       </div>
 
-      <button id="btn-return-lobby" class="btn btn-primary">Return to Menu</button>
+      <!-- Infection Timeline: Who Infected Who -->
+      <div class="game-over-recap-card" style="background: var(--obsidian-surface); border: 1.5px solid rgba(236, 48, 19, 0.4); border-radius: 12px; padding: 14px; text-align: left; margin-bottom: 18px;">
+        <h4 style="font-family: var(--font-primary); font-size: 13px; color: #ff3131; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+          ☣️ INFECTION TIMELINE (WHO INFECTED WHO)
+        </h4>
+        <div id="game-over-timeline-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto;">
+          <div style="font-size: 12px; color: var(--parchment-muted); font-style: italic;">No infections recorded this match.</div>
+        </div>
+      </div>
+
+      <!-- Operative Scoreboard -->
+      <div class="game-over-recap-card" style="background: var(--obsidian-surface); border: 1px solid var(--parchment-dim); border-radius: 12px; padding: 14px; text-align: left; margin-bottom: 24px;">
+        <h4 style="font-family: var(--font-primary); font-size: 13px; color: var(--parchment); margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+          🏆 OPERATIVE SCOREBOARD
+        </h4>
+        <div id="game-over-scoreboard-list" style="display: flex; flex-direction: column; gap: 8px;">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+
+      <button id="btn-return-lobby" class="btn btn-primary" style="margin-bottom: 24px;">Return to Menu</button>
     </div>
 
     <footer class="app-footer">
@@ -600,17 +702,17 @@
   <div id="tutorial-modal" class="modal-overlay" style="z-index: 3600;">
     <div class="tutorial-modal-box">
       
-      <!-- Modal Header with Tab Switcher -->
-      <div class="tutorial-header">
-        <div class="tutorial-tabs">
-          <button id="tab-btn-tutorial" class="tutorial-tab active">🎬 Animated Tutorial</button>
-          <button id="tab-btn-rules" class="tutorial-tab">📜 Official Rules</button>
+      <!-- Modal Header -->
+      <div class="tutorial-header" style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 12px; margin-bottom: 14px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 20px;">📜</span>
+          <h2 style="margin: 0; font-family: var(--font-primary, sans-serif); font-size: 18px; color: var(--parchment, #f1f5f9); letter-spacing: 1px;">FIELD MANUAL & OFFICIAL RULES</h2>
         </div>
         <button id="btn-close-tutorial" class="icon-button" style="width: 32px; height: 32px; font-size: 14px;">✕</button>
       </div>
 
-      <!-- TAB 1: Animated Interactive Walkthrough -->
-      <div id="tutorial-content-walkthrough" class="tutorial-tab-body active">
+      <!-- TAB 1: (Deprecated Walkthrough Hidden) -->
+      <div id="tutorial-content-walkthrough" class="tutorial-tab-body" style="display: none !important;">
         
         <!-- Stage Steps Navigation Chips -->
         <div class="tutorial-step-chips">
@@ -762,55 +864,85 @@
 
       </div>
 
-      <!-- TAB 2: Complete Official Rulebook -->
-      <div id="tutorial-content-rules" class="tutorial-tab-body">
+      <!-- Official Field Manual & Tactical Rulebook -->
+      <div id="tutorial-content-rules" class="tutorial-tab-body active" style="display: block;">
         <div class="rules-list-container">
           
           <div class="rule-card">
             <div class="rule-num">RULE 01</div>
             <div class="rule-body">
               <h4>Strictly On Foot (No Vehicles)</h4>
-              <p>All movement must be on foot (walking, jogging, sprinting). Cars, bicycles, e-scooters, skateboards, rollerblades, and public transport are strictly forbidden. Infractions result in immediate disqualification.</p>
+              <p>All movement must be on foot (walking, jogging, sprinting). Cars, bicycles, e-scooters, skateboards, rollerblades, and public transit are strictly forbidden. Infractions result in immediate disqualification.</p>
             </div>
           </div>
 
           <div class="rule-card">
             <div class="rule-num">RULE 02</div>
             <div class="rule-body">
-              <h4>Perimeter Boundary Integrity</h4>
-              <p>Operatives must remain within the circular arena zone set by the host at all times. Stepping out of bounds triggers a flashing red warning and siren. Runners outside the zone for more than 30 seconds forfeit the round.</p>
+              <h4>Perimeter Boundary Integrity (60s Red Alert Countdown)</h4>
+              <p>Operatives must remain within the circular arena zone set by the host. Stepping outside triggers an intense pulsing <b>RED ALERT SCREEN</b> and an audible siren with a <b>60-second countdown</b>. If an operative does not return inside the perimeter within 60s, they are eliminated and infected by the toxic wasteland!</p>
             </div>
           </div>
 
           <div class="rule-card">
             <div class="rule-num">RULE 03</div>
             <div class="rule-body">
-              <h4>Public Access & Safety First</h4>
-              <p>No trespassing on private property, construction zones, or locked buildings. Stay in public parks, sidewalks, and open outdoor spaces. Always obey pedestrian signals and watch for vehicular traffic.</p>
+              <h4>Live GPS Radar & Tactical Colors</h4>
+              <p>All operatives stream live, uninterrupted GPS coordinates on the tactical map without lag or ping interval delays:
+              <br>• 🏃 <b>Blue Dots (#2563eb)</b>: Survivors running and evading.
+              <br>• 💀 <b>Red Dots (#ec3013)</b>: Zombies hunting and closing in.</p>
             </div>
           </div>
 
           <div class="rule-card">
             <div class="rule-num">RULE 04</div>
             <div class="rule-body">
-              <h4>Gentle Physical Tagging</h4>
-              <p>A tag must be a physical touch with an arm's reach (gentle tap on shoulder, arm, or back). No tackling, grabbing, holding, or physical roughness. Once tagged, the runner confirms in-app and switches to Spectator mode.</p>
+              <h4>5-Meter Chase Infection Rule</h4>
+              <p>A Zombie infects a Survivor by closing in and staying within a <b>5-meter radius for 10 continuous seconds</b>. Survivors will see an on-screen evasion warning with a progress meter. Alternatively, a Zombie can physically scan the Survivor's personal QR tag code. <b>Zombies CANNOT infect other Zombies!</b></p>
             </div>
           </div>
 
           <div class="rule-card">
             <div class="rule-num">RULE 05</div>
             <div class="rule-body">
-              <h4>90-Second Disconnection Buffer</h4>
-              <p>If network connection drops or phone battery dies temporarily, the game holds your operative identity for 90 seconds. Simply re-open the app using the exact same codename to instantly restore your position and role.</p>
+              <h4>15-Meter Zombie Proximity Beep Warning</h4>
+              <p>When an active Zombie approaches within <b>15 meters</b> of a Survivor, an urgent audio sonar beep triggers on the Survivor's phone, accompanied by an on-screen evasion warning banner. As the Zombie closes distance (15m → 10m → 5m), the beep frequency speeds up and intensifies, giving Survivors vital auditory warning to sprint away!</p>
             </div>
           </div>
 
           <div class="rule-card">
             <div class="rule-num">RULE 06</div>
             <div class="rule-body">
-              <h4>Tactical Chat & Photo Intel</h4>
-              <p>Operatives may use the built-in tactical chat to share intelligence and snap live camera photos of hiding spots or landmarks. Hunters can coordinate pincer movements, while runners can warn teammates.</p>
+              <h4>Infection Transformation</h4>
+              <p>When a survivor is infected, their device vibrates, flashes red, and immediately transforms their UI into <b>ZOMBIE MODE</b>. Their blip turns RED, and they immediately join the horde to hunt down remaining survivors!</p>
+            </div>
+          </div>
+
+          <div class="rule-card">
+            <div class="rule-num">RULE 07</div>
+            <div class="rule-body">
+              <h4>Tactical Sectors & Map Zones Explained</h4>
+              <p>The tactical arena features 4 procedural landmarks:
+              <br>• 🏛️ <b>Arena Hub (Center)</b>: The central rally point (25m radius) where the game initiates.
+              <br>• 🛡️ <b>Sanctuary 1, 2, 3</b>: Distributed shelters around the arena where survivors can regroup and take temporary cover behind physical landmarks.
+              <br>• 📦 <b>Supply Outpost</b>: Key landmark stationed in the sector.
+              <br>• 🚀 <b>Extraction Zone Omega</b>: The ultimate escape portal (30m radius)! Dormant during the main hunt, it unlocks during the final 20% of match time. Survivors who reach Extraction Omega escape and win the game!</p>
+            </div>
+          </div>
+
+          <div class="rule-card">
+            <div class="rule-num">RULE 08</div>
+            <div class="rule-body">
+              <h4>90-Second Disconnection Buffer</h4>
+              <p>If network connection drops or phone battery sleeps temporarily, the server holds your operative identity for 90 seconds. Simply re-open the app with the exact same codename to immediately restore your position and role.</p>
+            </div>
+          </div>
+
+          <div class="rule-card">
+            <div class="rule-num">RULE 09</div>
+            <div class="rule-body">
+              <h4>Public Access & Safety First</h4>
+              <p>No trespassing on private property, construction zones, or locked buildings. Stay in public parks, sidewalks, and open outdoor spaces. Always obey pedestrian signals and watch for vehicular traffic.</p>
             </div>
           </div>
 
@@ -833,7 +965,6 @@
       </p>
       <div style="display: flex; flex-direction: column; gap: 10px;">
         <button id="btn-allow-gps" class="btn btn-primary">Allow Live GPS Feed</button>
-        <button id="btn-deny-gps" class="btn btn-secondary">Play with Virtual Joystick</button>
       </div>
     </div>
   </div>
@@ -848,22 +979,189 @@
     </div>
   </div>
 
-  <!-- MODAL: Supabase Database Settings Dialog -->
+  <!-- MODAL: System & Cloud Uplink Status Dialog -->
   <div id="settings-modal" class="modal-overlay">
     <div class="modal-card">
-      <h3 class="modal-title">Database Settings</h3>
-      <p class="modal-desc">Configure your Supabase Database & Realtime connection:</p>
-      <div style="text-align: left; margin-bottom: 16px;">
-        <label class="input-label">Supabase Project URL</label>
-        <input type="text" id="supabase-url-input" class="text-input" placeholder="https://xyz.supabase.co" style="font-size: 13px; margin-bottom: 12px;">
+      <h3 class="modal-title">SYSTEM UPLINK</h3>
+      <p class="modal-desc">All cloud systems are pre-configured & fully automated:</p>
+      
+      <div style="text-align: left; margin-bottom: 16px; background: rgba(255,255,255,0.04); padding: 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08);">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+          <span style="font-size: 13px; font-weight: 600; color: #fff;">Cloud Server</span>
+          <span style="font-size: 11px; padding: 2px 8px; border-radius: 6px; background: rgba(34,197,94,0.15); color: #4ade80; border: 1px solid rgba(34,197,94,0.3);">ONLINE (Render WSS)</span>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+          <span style="font-size: 13px; font-weight: 600; color: #fff;">Supabase Realtime</span>
+          <span style="font-size: 11px; padding: 2px 8px; border-radius: 6px; background: rgba(34,197,94,0.15); color: #4ade80; border: 1px solid rgba(34,197,94,0.3);">CONNECTED (Auto)</span>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <span style="font-size: 13px; font-weight: 600; color: #fff;">Network Mode</span>
+          <span style="font-size: 11px; padding: 2px 8px; border-radius: 6px; background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.3);">4G / 5G / Any Wi-Fi</span>
+        </div>
+      </div>
 
-        <label class="input-label">Supabase Anon Key</label>
-        <input type="password" id="supabase-key-input" class="text-input" placeholder="ey..." style="font-size: 13px;">
+      <!-- Developer Advanced Settings (Hidden by default) -->
+      <details style="margin-bottom: 16px; text-align: left; font-size: 12px; color: #94a3b8;">
+        <summary style="cursor: pointer; padding: 4px 0; color: var(--runner-gold);">Developer Credentials Override</summary>
+        <div style="margin-top: 10px;">
+          <label class="input-label" style="font-size: 11px;">Supabase Project URL</label>
+          <input type="text" id="supabase-url-input" class="text-input" placeholder="https://xyz.supabase.co" style="font-size: 12px; margin-bottom: 8px;">
+
+          <label class="input-label" style="font-size: 11px;">Supabase Anon Key</label>
+          <input type="password" id="supabase-key-input" class="text-input" placeholder="ey..." style="font-size: 12px; margin-bottom: 8px;">
+          <button id="btn-save-settings" class="btn btn-secondary" style="font-size: 11px; padding: 6px 12px;">Save Custom Keys</button>
+        </div>
+      </details>
+
+      <button id="btn-close-settings" class="btn btn-primary" style="width: 100%;">Close Status</button>
+    </div>
+  </div>
+
+  <!-- MODAL: My Personal QR Code & Tag ID -->
+  <div id="modal-my-qr" class="modal-overlay" style="display: none; z-index: 3850;">
+    <div class="modal-card" style="text-align: center;">
+      <h3 class="modal-title" id="my-qr-title">YOUR CODENAME & QR</h3>
+      <p class="modal-desc" id="my-qr-desc">Show this code to confirm an in-person tag:</p>
+      
+      <div id="my-qr-box" class="qr-canvas-container" style="margin: 16px auto; background: white; padding: 16px; border-radius: 16px; display: inline-block;">
+        <img id="my-qr-img" src="" alt="Personal QR" style="width: 180px; height: 180px; display: block;">
       </div>
-      <div style="display: flex; gap: 10px;">
-        <button id="btn-save-settings" class="btn btn-primary">Save & Connect</button>
-        <button id="btn-close-settings" class="btn btn-secondary">Close</button>
+
+      <div style="margin-bottom: 16px;">
+        <span class="input-label" style="display: block; font-size: 11px;">TEXT TAG CODE</span>
+        <span id="my-qr-text-code" style="font-family: var(--font-mono); font-size: 20px; font-weight: 800; color: var(--parchment); letter-spacing: 0.15em;">------</span>
       </div>
+
+      <button id="btn-close-my-qr" class="btn btn-secondary">Close</button>
+    </div>
+  </div>
+
+  <!-- MODAL: QR Code Camera Scanner -->
+  <div id="modal-qr-scanner" class="modal-overlay" style="display: none; z-index: 3900;">
+    <div class="modal-card" style="max-width: 380px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <h3 class="modal-title" id="scanner-modal-title" style="margin: 0;">SCAN TAG CODE</h3>
+        <button id="btn-close-scanner" class="icon-button" style="width: 32px; height: 32px; font-size: 14px;">✕</button>
+      </div>
+      <p class="modal-desc" id="scanner-modal-desc">Point your camera at the operative's QR code:</p>
+
+      <div class="scanner-viewport-box" style="position: relative; width: 100%; height: 220px; background: #000; border-radius: 14px; overflow: hidden; margin-bottom: 14px;">
+        <video id="scanner-video-preview" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>
+        <div class="scanner-crosshair-reticle"></div>
+      </div>
+
+      <div style="margin-bottom: 14px;">
+        <label class="input-label">OR ENTER CODE MANUALLY</label>
+        <input type="text" id="manual-qr-code-input" class="text-input" placeholder="e.g. TAG_A8F2" style="text-transform: uppercase; font-family: var(--font-mono);">
+      </div>
+
+      <button id="btn-submit-scanned-code" class="btn btn-primary">Confirm Tag Admission</button>
+    </div>
+  </div>
+
+
+
+  <!-- MODAL: System Hardware & Services Status (PlayCulture Style) -->
+  <div id="modal-services-status" class="modal-overlay" style="display: none; z-index: 3950;">
+    <div class="modal-card modal-services-card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 26px;">⚙️</span>
+          <div>
+            <h3 class="modal-title" style="margin: 0; font-size: 18px; letter-spacing: 0.04em;">SYSTEM HARDWARE & SENSORS</h3>
+            <span style="font-size: 11px; color: var(--parchment-muted); font-family: var(--font-mono);">LIVE DIAGNOSTICS & RUNTIME PERMISSIONS</span>
+          </div>
+        </div>
+        <button id="btn-close-services" class="icon-button" style="width: 34px; height: 34px; font-size: 16px;">✕</button>
+      </div>
+
+      <div class="services-list-container">
+        <!-- 1. Internet Service -->
+        <div class="service-item-row" id="service-row-net">
+          <div class="service-icon-box status-active">
+            <span class="service-symbol">↔</span>
+          </div>
+          <div class="service-info-box">
+            <div class="service-title-line">
+              <span class="service-name">Tactical Uplink (Network)</span>
+              <span class="service-badge-pill green" id="badge-net-status">CONNECTED</span>
+            </div>
+            <p class="service-subtext" id="service-net-details">WebSocket game loop active (ping: <span id="net-ping-display">--</span> ms)</p>
+          </div>
+          <button class="service-action-btn icon-only" id="btn-refresh-net" title="Reconnect Uplink">⟳</button>
+        </div>
+
+        <!-- 2. Location GPS Service -->
+        <div class="service-item-row" id="service-row-gps">
+          <div class="service-icon-box" id="iconbox-gps">
+            <span class="service-symbol">📍</span>
+          </div>
+          <div class="service-info-box">
+            <div class="service-title-line">
+              <span class="service-name">Tactical GPS Location</span>
+              <span class="service-badge-pill" id="badge-gps-status">CHECKING...</span>
+            </div>
+            <p class="service-subtext" id="service-gps-details">Requires High-Accuracy GPS for radar blips and geofencing.</p>
+          </div>
+          <div class="service-btn-group">
+            <button class="service-action-btn primary" id="btn-grant-gps">Grant</button>
+            <button class="service-action-btn icon-only" id="btn-settings-gps" title="Open App Settings">⚙</button>
+          </div>
+        </div>
+
+        <!-- 3. Bluetooth BLE Service -->
+        <div class="service-item-row" id="service-row-ble">
+          <div class="service-icon-box" id="iconbox-ble">
+            <span class="service-symbol">📡</span>
+          </div>
+          <div class="service-info-box">
+            <div class="service-title-line">
+              <span class="service-name">Bluetooth Proximity (BLE)</span>
+              <span class="service-badge-pill" id="badge-ble-status">CHECKING...</span>
+            </div>
+            <p class="service-subtext" id="service-ble-details">Enables 10-meter Zombie Proximity Bursts and stealth detection.</p>
+          </div>
+          <div class="service-btn-group">
+            <button class="service-action-btn primary" id="btn-grant-ble">Enable</button>
+            <button class="service-action-btn icon-only" id="btn-settings-ble" title="Open App Settings">⚙</button>
+          </div>
+        </div>
+
+        <!-- 4. Camera Service -->
+        <div class="service-item-row" id="service-row-cam">
+          <div class="service-icon-box" id="iconbox-cam">
+            <span class="service-symbol">📷</span>
+          </div>
+          <div class="service-info-box">
+            <div class="service-title-line">
+              <span class="service-name">Optic Camera Scanner</span>
+              <span class="service-badge-pill" id="badge-cam-status">CHECKING...</span>
+            </div>
+            <p class="service-subtext" id="service-cam-details">Required for scanning player QR tag codes.</p>
+          </div>
+          <div class="service-btn-group">
+            <button class="service-action-btn primary" id="btn-grant-cam">Grant</button>
+            <button class="service-action-btn icon-only" id="btn-settings-cam" title="Open App Settings">⚙</button>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top: 18px; display: flex; justify-content: space-between; align-items: center; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.08);">
+        <span style="font-size: 11px; color: var(--parchment-muted); font-family: var(--font-mono);">DEVICE: SAMSUNG GALAXY NOTE 8</span>
+        <button id="btn-done-services" class="btn btn-primary btn-sm" style="height: 38px; padding: 0 16px;">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Infection Alert Dialog -->
+  <div id="modal-infection-alert" class="modal-overlay" style="display: none; z-index: 4000; background: rgba(236, 48, 19, 0.85); backdrop-filter: blur(8px);">
+    <div class="modal-card" style="text-align: center; border-color: #fff; background: var(--ink);">
+      <div style="font-size: 48px; margin-bottom: 8px;">☣️</div>
+      <h2 style="font-family: var(--font-primary); font-size: 28px; color: #ff3131; font-weight: 800; margin-bottom: 8px;">YOU HAVE BEEN INFECTED!</h2>
+      <p id="infection-alert-desc" style="font-size: 15px; color: var(--parchment); margin-bottom: 20px;">
+        Tagged by <b>Hunter Alpha</b>.<br>You are now a <b>ZOMBIE</b>.
+      </p>
+      <button id="btn-ack-infection" class="btn btn-tag-action" style="background: var(--brand-red);">JOIN THE HUNT NOW 🧟</button>
     </div>
   </div>
 

@@ -4,12 +4,23 @@
 (() => {
   'use strict';
 
+  // Force portrait orientation lock across browsers and native webview
+  try {
+    if (window.screen && window.screen.orientation && window.screen.orientation.lock) {
+      window.screen.orientation.lock('portrait').catch(() => {});
+    }
+  } catch (e) {}
+
   // State
   let ws = null;
-  let myPlayerId = localStorage.getItem('RFYL_ACTIVE_PLAYER_ID') || ('p_' + Math.random().toString(36).substring(2, 9));
-  localStorage.setItem('RFYL_ACTIVE_PLAYER_ID', myPlayerId);
+  // Use sessionStorage so multiple tabs in the same browser have independent player sessions
+  let myPlayerId = sessionStorage.getItem('RFYL_ACTIVE_PLAYER_ID');
+  if (!myPlayerId) {
+    myPlayerId = 'p_' + Math.random().toString(36).substring(2, 9);
+    sessionStorage.setItem('RFYL_ACTIVE_PLAYER_ID', myPlayerId);
+  }
 
-  let myRoomCode = localStorage.getItem('RFYL_ACTIVE_ROOM') || null;
+  let myRoomCode = sessionStorage.getItem('RFYL_ACTIVE_ROOM') || null;
   let isHost = false;
   let currentRole = 'random';
   let myAssignedRole = null; // 'hunter' | 'runner'
@@ -35,6 +46,7 @@
   let gameCircle = null;
   let myMarker = null;
   let hunterMarkers = new Map();
+  let peerMarkers = new Map();
   let runnerPingMarkers = new Map();
   let currentRoomData = null;
   let activeGameClockInterval = null;
@@ -45,6 +57,36 @@
     hunterPingInterval: 30,
     runnerPingInterval: 50,
     arena: null
+  };
+  let currentPhase = 'LOBBY';
+  let lastProximityBeepTime = 0;
+  let gpsPollInterval = null;
+
+  // --- ZOMBIES SURVIVAL MECHANICS STATE ---
+  let myBounties = 0;
+  let myPowerups = [];
+  let myActiveEffects = { cloaked: false, antiCloak: false, radarExtended: false, freshMeat: false };
+  let myTagCode = 'TAG_' + Math.random().toString(36).substring(2, 8).toUpperCase();
+  let zoneMarkers = new Map();
+  let isInfectiousState = false;
+  let infectCooldownRemaining = 0;
+  let scannerStream = null;
+  let screenWakeLock = null;
+  let userIsDraggingMap = false;
+  let userDragTimeout = null;
+  let clientOobState = {
+    active: false,
+    remainingSeconds: 60,
+    intervalId: null
+  };
+
+  const CLIENT_POWERUP_CATALOG = {
+    CLOAK: { id: 'CLOAK', name: 'Cloak', cost: 25, role: 'survivor', durationSeconds: 30, desc: 'Stealth: Invisible from radar & immune to proximity burst for 30s.' },
+    CLOAK_PLUS: { id: 'CLOAK_PLUS', name: 'Cloak+', cost: 45, role: 'survivor', durationSeconds: 60, desc: 'Extended stealth for 60s.' },
+    ANTI_CLOAK: { id: 'ANTI_CLOAK', name: 'Anti-Cloak', cost: 30, role: 'both', durationSeconds: 30, desc: 'Sensor: Reveals cloaked players on radar within 100m.' },
+    RADAR_EXTEND: { id: 'RADAR_EXTEND', name: 'Radar Extend', cost: 20, role: 'both', durationSeconds: 45, desc: 'Expands radar range by 1.5x.' },
+    RADAR_EXTEND_PLUS: { id: 'RADAR_EXTEND_PLUS', name: 'Radar Extend+', cost: 35, role: 'both', durationSeconds: 60, desc: 'Expands radar range by 2.5x.' },
+    FRESH_MEAT: { id: 'FRESH_MEAT', name: 'Fresh Meat', cost: 25, role: 'zombie', durationSeconds: 30, desc: 'Scent Trail: Pings bearing & distance to closest living survivor.' }
   };
 
   // Joystick state
@@ -87,9 +129,33 @@
     const roomParam = urlParams.get('room');
     if (roomParam) {
       const joinInput = document.getElementById('join-code-input');
-      if (joinInput) joinInput.value = roomParam.toUpperCase();
+      if (joinInput) {
+        joinInput.value = roomParam.toUpperCase();
+        updateCodeDigits(roomParam);
+      }
       showScreen('join');
     }
+  }
+
+  // --- JOIN CODE VISUAL DIGITS SYNC ---
+  const joinCodeInput = document.getElementById('join-code-input');
+  const codeDigits = document.querySelectorAll('#join-code-container .code-digit');
+  function updateCodeDigits(val) {
+    const clean = (val || '').toUpperCase().slice(0, 6);
+    codeDigits.forEach((digit, idx) => {
+      if (idx < clean.length) {
+        digit.textContent = clean[idx];
+        digit.classList.add('filled');
+      } else {
+        digit.textContent = '';
+        digit.classList.remove('filled');
+      }
+    });
+  }
+  if (joinCodeInput) {
+    joinCodeInput.addEventListener('input', (e) => {
+      updateCodeDigits(e.target.value);
+    });
   }
 
   // Animate preloader progress
@@ -128,61 +194,109 @@
 
   // --- COMPULSORY OPERATIVE CODENAME SYSTEM ---
   const nameInput = document.getElementById('player-name-input');
+  const joinNameInput = document.getElementById('join-player-name-input');
   const nameWarning = document.getElementById('name-validation-msg');
 
   // Load saved name if any
-  const savedPlayerName = localStorage.getItem('RFYL_PLAYER_NAME');
-  if (savedPlayerName && nameInput) {
-    nameInput.value = savedPlayerName;
+  const savedPlayerName = sessionStorage.getItem('RFYL_PLAYER_NAME') || localStorage.getItem('RFYL_PLAYER_NAME');
+  if (savedPlayerName) {
+    if (nameInput) nameInput.value = savedPlayerName;
+    if (joinNameInput) joinNameInput.value = savedPlayerName;
   }
 
   function validatePlayerName() {
-    const val = nameInput ? nameInput.value.trim() : '';
+    const val = (nameInput ? nameInput.value.trim() : '') || (joinNameInput ? joinNameInput.value.trim() : '');
     if (!val) {
       if (nameWarning) {
         nameWarning.style.display = 'block';
         nameWarning.classList.add('shake');
         setTimeout(() => nameWarning.classList.remove('shake'), 600);
       }
-      if (nameInput) {
+      if (nameInput && screens.landing?.classList.contains('active')) {
         nameInput.focus();
         nameInput.classList.add('error-shake');
         setTimeout(() => nameInput.classList.remove('error-shake'), 600);
+      }
+      if (joinNameInput && screens.join?.classList.contains('active')) {
+        joinNameInput.focus();
+        joinNameInput.classList.add('error-shake');
+        setTimeout(() => joinNameInput.classList.remove('error-shake'), 600);
       }
       window.soundEngine?.playHeartbeat?.();
       return null;
     }
     if (nameWarning) nameWarning.style.display = 'none';
+    sessionStorage.setItem('RFYL_PLAYER_NAME', val);
     localStorage.setItem('RFYL_PLAYER_NAME', val);
     return val;
   }
 
   if (nameInput) {
     nameInput.addEventListener('input', () => {
-      if (nameInput.value.trim().length > 0) {
+      const val = nameInput.value.trim();
+      if (joinNameInput && joinNameInput.value !== nameInput.value) {
+        joinNameInput.value = nameInput.value;
+      }
+      if (val.length > 0) {
         if (nameWarning) nameWarning.style.display = 'none';
-        localStorage.setItem('RFYL_PLAYER_NAME', nameInput.value.trim());
+        sessionStorage.setItem('RFYL_PLAYER_NAME', val);
+        localStorage.setItem('RFYL_PLAYER_NAME', val);
       }
     });
   }
 
-  // --- INITIALIZE WEBSOCKET WITH 90s RECONNECT SUPPORT ---
+  if (joinNameInput) {
+    joinNameInput.addEventListener('input', () => {
+      const val = joinNameInput.value.trim();
+      if (nameInput && nameInput.value !== joinNameInput.value) {
+        nameInput.value = joinNameInput.value;
+      }
+      if (val.length > 0) {
+        if (nameWarning) nameWarning.style.display = 'none';
+        sessionStorage.setItem('RFYL_PLAYER_NAME', val);
+        localStorage.setItem('RFYL_PLAYER_NAME', val);
+      }
+    });
+  }
+
+  // --- INITIALIZE WEBSOCKET WITH 90s RECONNECT SUPPORT & MOBILE LAN FALLBACK ---
+  let wsHostIdx = 0;
+  function getWsCandidateUrl() {
+    // If running in browser on Render or custom web host
+    if (window.location.hostname && window.location.hostname.includes('onrender.com')) {
+      return `wss://${window.location.host}`;
+    }
+    // If running in browser with explicit port (e.g. :3000), use that directly
+    if (window.location.port && window.location.port !== '80' && window.location.port !== '443') {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      return `${protocol}//${window.location.host}`;
+    }
+    // When running inside Android Capacitor APK (or on 4G/5G mobile data), connect directly to Render Cloud
+    const candidates = [
+      'wss://run-for-your-life-y58o.onrender.com',
+      'ws://192.168.0.212:3000',
+      'ws://192.168.0.109:3000',
+      'ws://localhost:3000'
+    ];
+    return candidates[wsHostIdx % candidates.length];
+  }
+
   function initWebSocket() {
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
 
     try {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}`;
+      const wsUrl = getWsCandidateUrl();
+      console.log(`Connecting WebSocket to: ${wsUrl}`);
       ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
-        console.log('Connected to game server');
+        console.log(`Connected to game server at ${wsUrl}`);
 
-        // Check if we need to auto-reconnect to an active room
-        const activeRoom = localStorage.getItem('RFYL_ACTIVE_ROOM');
-        const activeName = localStorage.getItem('RFYL_PLAYER_NAME');
-        if (activeRoom && activeName && myPlayerId) {
-          console.log(`Attempting reconnect to room ${activeRoom} as ${activeName}`);
+        // Check if we need to auto-reconnect to an active room for THIS tab
+        const activeRoom = sessionStorage.getItem('RFYL_ACTIVE_ROOM');
+        const activeName = sessionStorage.getItem('RFYL_PLAYER_NAME') || localStorage.getItem('RFYL_PLAYER_NAME');
+        if (activeRoom && myPlayerId) {
+          console.log(`Attempting reconnect to room ${activeRoom} as ${activeName || myPlayerId}`);
           ws.send(JSON.stringify({
             type: 'RECONNECT_ROOM',
             roomCode: activeRoom,
@@ -201,12 +315,19 @@
         }
       };
 
+      ws.onerror = () => {
+        wsHostIdx++;
+      };
+
       ws.onclose = () => {
-        // Retry connection in background
-        setTimeout(initWebSocket, 4000);
+        // Retry connection in background with next candidate host if disconnected
+        wsHostIdx++;
+        setTimeout(initWebSocket, 3000);
       };
     } catch (e) {
-      console.warn('WebSocket unavailable, relying on Supabase Realtime channel.');
+      console.warn('WebSocket init exception, will retry:', e);
+      wsHostIdx++;
+      setTimeout(initWebSocket, 4000);
     }
   }
 
@@ -219,33 +340,66 @@
         myPlayerId = msg.playerId || myPlayerId;
         myRoomCode = msg.roomCode;
         isHost = true;
-        localStorage.setItem('RFYL_ACTIVE_ROOM', myRoomCode);
-        localStorage.setItem('RFYL_ACTIVE_PLAYER_ID', myPlayerId);
+        sessionStorage.setItem('RFYL_ACTIVE_ROOM', myRoomCode);
+        sessionStorage.setItem('RFYL_ACTIVE_PLAYER_ID', myPlayerId);
+
+        currentRoomData = Object.assign(currentRoomData || {}, msg);
+        if (msg.config) currentRoomConfig = Object.assign(currentRoomConfig, msg.config);
+        currentPhase = msg.state || 'LOBBY';
 
         updateLobbyRoomCode(myRoomCode);
         document.getElementById('btn-start-game').style.display = 'block';
         document.getElementById('host-waiting-msg').style.display = 'none';
         showScreen('lobby');
+        if (msg.players) {
+          updateLobbyUI(msg);
+        }
+        if (msg.chatHistory && Array.isArray(msg.chatHistory)) {
+          msg.chatHistory.forEach((c) => receiveChatMessage(c));
+        }
         connectToSupabaseRoom(myRoomCode);
         break;
 
       case 'ROOM_JOINED':
       case 'RECONNECTED':
+      case 'RECONNECT_SUCCESS':
         myPlayerId = msg.playerId || myPlayerId;
         myRoomCode = msg.roomCode;
-        isHost = false;
-        localStorage.setItem('RFYL_ACTIVE_ROOM', myRoomCode);
-        localStorage.setItem('RFYL_ACTIVE_PLAYER_ID', myPlayerId);
+        isHost = (msg.hostId && msg.hostId === myPlayerId) || false;
+        sessionStorage.setItem('RFYL_ACTIVE_ROOM', myRoomCode);
+        sessionStorage.setItem('RFYL_ACTIVE_PLAYER_ID', myPlayerId);
+
+        currentRoomData = Object.assign(currentRoomData || {}, msg);
+        if (msg.config) currentRoomConfig = Object.assign(currentRoomConfig, msg.config);
+        currentPhase = msg.state || 'LOBBY';
 
         updateLobbyRoomCode(myRoomCode);
-        document.getElementById('btn-start-game').style.display = 'none';
-        document.getElementById('host-waiting-msg').style.display = 'block';
+        if (isHost) {
+          document.getElementById('btn-start-game').style.display = 'block';
+          document.getElementById('host-waiting-msg').style.display = 'none';
+        } else {
+          document.getElementById('btn-start-game').style.display = 'none';
+          document.getElementById('host-waiting-msg').style.display = 'block';
+        }
         
-        if (msg.roomState && (msg.roomState.state === 'HUNT' || msg.roomState.state === 'HEAD_START')) {
-          currentRoomData = msg.roomState;
-          handlePhaseChange(msg.roomState);
+        const activeState = msg.state || msg.roomState?.state;
+        const isActiveGame = activeState === 'THE_HUNT' || activeState === 'HEAD_START' || activeState === 'EXTRACTION';
+
+        if (isActiveGame) {
+          currentRoomData = Object.assign(currentRoomData || {}, msg);
+          if (msg.config) currentRoomConfig = Object.assign(currentRoomConfig, msg.config);
+          myAssignedRole = msg.role || 'survivor';
+          currentRole = myAssignedRole;
+          handlePhaseChange(msg);
+          startLocationTracking();
         } else {
           showScreen('lobby');
+        }
+        if (msg.players) {
+          updateLobbyUI(msg);
+        }
+        if (msg.chatHistory && Array.isArray(msg.chatHistory)) {
+          msg.chatHistory.forEach((c) => receiveChatMessage(c));
         }
         connectToSupabaseRoom(myRoomCode);
         break;
@@ -278,8 +432,44 @@
         updateHunterPositions(msg.hunters);
         break;
 
-      case 'PLAYER_TAGGED':
-        handlePlayerTagged(msg);
+      case 'RADAR_UPDATE':
+        handleRadarUpdate(msg);
+        break;
+
+      case 'ZOMBIE_INFECTION_TRIGGERED':
+        handleZombieInfectionTriggered(msg);
+        break;
+
+      case 'ZOMBIE_INFECTION_EXPIRED':
+        handleZombieInfectionExpired(msg);
+        break;
+
+      case 'CHASE_WARNING':
+        handleChaseWarning(msg);
+        break;
+
+      case 'CHASE_ESCAPED':
+        handleChaseEscaped(msg);
+        break;
+
+      case 'PLAYER_INFECTED':
+        handlePlayerInfected(msg);
+        break;
+
+      case 'POWERUP_BOUGHT':
+        handlePowerupBought(msg);
+        break;
+
+      case 'POWERUP_ACTIVATED':
+        handlePowerupActivated(msg);
+        break;
+
+      case 'EXTRACTION_PHASE_STARTED':
+        handleExtractionStarted(msg);
+        break;
+
+      case 'SURVIVOR_ESCAPED':
+        handleSurvivorEscaped(msg);
         break;
 
       case 'GAME_OVER':
@@ -368,7 +558,10 @@
   // --- SUPABASE REALTIME BRIDGE ---
   async function connectToSupabaseRoom(code) {
     if (!window.supabaseGameManager) return;
-    const playerName = document.getElementById('player-name-input').value.trim() || 'Operative';
+    const playerName = (document.getElementById('join-player-name-input')?.value.trim()) ||
+                       (document.getElementById('player-name-input')?.value.trim()) ||
+                       sessionStorage.getItem('RFYL_PLAYER_NAME') ||
+                       'Operative';
     const myRole = myAssignedRole || currentRole || (isHost ? 'hunter' : 'runner');
     const player = {
       id: myPlayerId,
@@ -401,7 +594,7 @@
     if (!currentRoomData) currentRoomData = { players: [] };
     if (!currentRoomData.players) currentRoomData.players = [];
 
-    const isHunter = myAssignedRole === 'hunter' || currentRole === 'hunter' || isHost;
+    const isHunter = myAssignedRole === 'hunter' || myAssignedRole === 'zombie' || currentRole === 'zombie';
     let role = payload.role;
     if (!role || role === 'random') {
       role = isHunter ? 'runner' : 'hunter';
@@ -428,23 +621,49 @@
     }
     updateRunnersAliveCount();
 
-    if (myAssignedRole === 'hunter' && payload.role === 'hunter' && payload.lat && payload.lng) {
-      updateHunterPositions([{ id: payload.playerId, name: payload.name || 'Hunter', lat: payload.lat, lng: payload.lng }]);
+    if (Number.isFinite(payload.lat) && Number.isFinite(payload.lng)) {
+      const myLat = myPosition?.lat;
+      const myLng = myPosition?.lng;
+      let dist = 0;
+      let bearing = 0;
+      if (Number.isFinite(myLat) && Number.isFinite(myLng)) {
+        dist = Math.round(haversine(myLat, myLng, payload.lat, payload.lng));
+      }
+      const isTeammate = role === myAssignedRole;
+
+      // In peer mode, show teammates anywhere, and opponents within 250m radar range
+      if (isTeammate || dist <= 250) {
+        updatePeerMapMarkers([{
+          id: payload.playerId,
+          name: payload.name || 'Operative',
+          role: role,
+          lat: payload.lat,
+          lng: payload.lng,
+          dist,
+          bearing,
+          isTeammate,
+          isInfectious: Boolean(payload.isInfectious)
+        }], false);
+      }
     }
   }
 
   function updateLobbyWithPresence(presencePlayers) {
+    // If WebSocket is open and connected to server, WebSocket is authoritative for room roster
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      return;
+    }
+
     const formattedPlayers = presencePlayers.map((p) => {
       let role = p.assignedRole || p.role;
       if (!role || role === 'random') {
         if (p.rolePreference && p.rolePreference !== 'random') {
           role = p.rolePreference;
-        } else if (currentRoomData?.hostId) {
-          role = p.id === currentRoomData.hostId ? 'hunter' : 'runner';
         } else if (p.id === myPlayerId) {
-          role = isHost ? 'hunter' : 'runner';
+          role = (myAssignedRole === 'hunter' || myAssignedRole === 'zombie' || currentRole === 'zombie') ? 'hunter' : 'runner';
         } else {
-          role = (myAssignedRole === 'hunter' || currentRole === 'hunter' || isHost) ? 'runner' : 'hunter';
+          const amHunter = (myAssignedRole === 'hunter' || myAssignedRole === 'zombie' || currentRole === 'zombie');
+          role = amHunter ? 'runner' : 'hunter';
         }
       }
       return {
@@ -473,7 +692,7 @@
     });
 
     if (!currentRoomData?.state || currentRoomData.state === 'LOBBY') {
-      updateLobbyUI({ players: formattedPlayers });
+      updateLobbyUI({ players: currentRoomData.players });
     }
 
     // Always recompute runners alive count on presence change
@@ -495,6 +714,10 @@
     window.soundEngine?.playClick();
     document.getElementById('location-permission-modal').classList.remove('active');
 
+    if (window.AndroidNative?.requestLocationPermission) {
+      window.AndroidNative.requestLocationPermission();
+    }
+
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
@@ -503,7 +726,9 @@
           myPosition = { lat: pos.coords.latitude, lng: pos.coords.longitude };
           const gpsLabel = document.getElementById('gps-btn-label');
           if (gpsLabel) gpsLabel.textContent = 'GPS';
-          document.getElementById('joystick').style.display = 'none';
+          const joyEl = document.getElementById('joystick');
+          if (joyEl) joyEl.style.display = 'none';
+          refreshHardwareStatus();
 
           if (setupMap) setupMap.setView([myPosition.lat, myPosition.lng], 16);
           if (pendingActionAfterPermission) {
@@ -517,8 +742,9 @@
           useSimulationGps = true;
           const gpsLabel = document.getElementById('gps-btn-label');
           if (gpsLabel) gpsLabel.textContent = 'Sim';
-          document.getElementById('joystick').style.display = 'flex';
-          alert('GPS permission not granted. Switched to on-screen Simulation Joystick.');
+          const joyEl = document.getElementById('joystick');
+          if (joyEl) joyEl.style.display = 'none';
+          refreshHardwareStatus();
           if (pendingActionAfterPermission) {
             pendingActionAfterPermission();
             pendingActionAfterPermission = null;
@@ -529,18 +755,20 @@
     } else {
       hasLocationPermission = true;
       useSimulationGps = true;
+      refreshHardwareStatus();
       if (pendingActionAfterPermission) pendingActionAfterPermission();
     }
   });
 
-  document.getElementById('btn-deny-gps').addEventListener('click', () => {
+  document.getElementById('btn-deny-gps')?.addEventListener('click', () => {
     window.soundEngine?.playClick();
-    document.getElementById('location-permission-modal').classList.remove('active');
+    document.getElementById('location-permission-modal')?.classList.remove('active');
     hasLocationPermission = true;
-    useSimulationGps = true;
+    useSimulationGps = false;
     const gpsLabel = document.getElementById('gps-btn-label');
-    if (gpsLabel) gpsLabel.textContent = 'Sim';
-    document.getElementById('joystick').style.display = 'flex';
+    if (gpsLabel) gpsLabel.textContent = 'GPS';
+    const joyEl = document.getElementById('joystick');
+    if (joyEl) joyEl.style.display = 'none';
     if (pendingActionAfterPermission) {
       pendingActionAfterPermission();
       pendingActionAfterPermission = null;
@@ -620,7 +848,13 @@
 
   // --- SETUP MAP (DRAGGABLE ARENA GEOFENCE) ---
   function initSetupMap() {
-    if (setupMap) return;
+    if (setupMap) {
+      if (myPosition && (myPosition.lat !== 37.7749 || myPosition.lng !== -122.4194)) {
+        setupMap.setView([myPosition.lat, myPosition.lng], 16);
+        if (setupCircle) setupCircle.setLatLng([myPosition.lat, myPosition.lng]);
+      }
+      return;
+    }
 
     setupMap = L.map('setup-map', {
       zoomControl: false,
@@ -640,6 +874,21 @@
       radius: radius
     }).addTo(setupMap);
 
+    // Request immediate GPS fix to snap arena geofence to host's real location
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          myPosition = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          if (setupMap) {
+            setupMap.setView([myPosition.lat, myPosition.lng], 16);
+            if (setupCircle) setupCircle.setLatLng([myPosition.lat, myPosition.lng]);
+          }
+        },
+        (err) => console.warn('GPS initial fix notice:', err),
+        { enableHighAccuracy: true, timeout: 6000, maximumAge: 0 }
+      );
+    }
+
     setupMap.on('move', () => {
       const center = setupMap.getCenter();
       setupCircle.setLatLng(center);
@@ -652,26 +901,33 @@
     });
   }
 
-  // --- CREATE ROOM (DUAL PING INTERVALS SELECTION) ---
+  // --- CREATE ROOM (WITH STARTING ZOMBIES COUNT) ---
+  const setupZombiesSlider = document.getElementById('setup-zombies-slider');
+  const setupZombiesDisplay = document.getElementById('setup-zombies-display');
+  if (setupZombiesSlider && setupZombiesDisplay) {
+    setupZombiesSlider.addEventListener('input', (e) => {
+      const val = parseInt(e.target.value, 10);
+      setupZombiesDisplay.textContent = `${val} ${val === 1 ? 'Zombie' : 'Zombies'}`;
+    });
+  }
+
   document.getElementById('btn-confirm-create-room').addEventListener('click', () => {
     window.soundEngine?.playClick();
     const name = validatePlayerName() || 'Operative One';
-    const center = setupMap ? setupMap.getCenter() : myPosition;
+    let center = setupMap ? setupMap.getCenter() : myPosition;
+    if (center.lat === 37.7749 && center.lng === -122.4194 && (myPosition.lat !== 37.7749 || myPosition.lng !== -122.4194)) {
+      center = myPosition;
+    }
     const radius = parseInt(document.getElementById('radius-slider').value, 10);
     const roundLength = parseInt(document.getElementById('round-length-select').value, 10);
-    
-    // Custom individual Hunter and Runner Ping Intervals (20s - 80s)
-    const hunterPingInterval = parseInt(document.getElementById('hunter-ping-interval-select')?.value || '30', 10);
-    const runnerPingInterval = parseInt(document.getElementById('runner-ping-interval-select')?.value || '50', 10);
+    const startingZombiesCount = parseInt(document.getElementById('setup-zombies-slider')?.value || '1', 10);
 
     const arena = { lat: center.lat, lng: center.lng, radius };
 
     currentRoomConfig = {
       arena,
       roundLength,
-      pingInterval: runnerPingInterval,
-      hunterPingInterval,
-      runnerPingInterval,
+      startingZombiesCount,
       headStart: 180
     };
 
@@ -682,9 +938,7 @@
           name,
           arena,
           roundLength,
-          pingInterval: runnerPingInterval,
-          hunterPingInterval,
-          runnerPingInterval,
+          startingZombiesCount,
           headStart: 180
         })
       );
@@ -717,7 +971,17 @@
   // --- JOIN ROOM ---
   document.getElementById('btn-confirm-join').addEventListener('click', async () => {
     window.soundEngine?.playClick();
-    const name = validatePlayerName() || 'Operative ' + Math.floor(Math.random() * 90 + 10);
+    const joinNameEl = document.getElementById('join-player-name-input');
+    const landingNameEl = document.getElementById('player-name-input');
+    let name = (joinNameEl ? joinNameEl.value.trim() : '') ||
+               (landingNameEl ? landingNameEl.value.trim() : '') ||
+               sessionStorage.getItem('RFYL_PLAYER_NAME') ||
+               localStorage.getItem('RFYL_PLAYER_NAME') ||
+               'Operative ' + Math.floor(Math.random() * 90 + 10);
+
+    sessionStorage.setItem('RFYL_PLAYER_NAME', name);
+    localStorage.setItem('RFYL_PLAYER_NAME', name);
+
     const code = document.getElementById('join-code-input').value.trim().toUpperCase();
 
     if (code.length !== 6) {
@@ -730,6 +994,7 @@
         JSON.stringify({
           type: 'JOIN_ROOM',
           roomCode: code,
+          playerId: myPlayerId,
           name,
           rolePreference: currentRole
         })
@@ -764,88 +1029,73 @@
     });
   });
 
-  // Role Selection Cards in Lobby
-  document.querySelectorAll('.role-card').forEach((card) => {
-    card.addEventListener('click', () => {
-      window.soundEngine?.playClick();
-      document.querySelectorAll('.role-card').forEach((c) => c.classList.remove('selected', 'hunter', 'runner'));
-      card.classList.add('selected');
-      const role = card.dataset.role;
-      if (role !== 'random') card.classList.add(role);
-      currentRole = role;
+  // --- INITIAL ZOMBIES STEPPER & 100% RANDOM ROLE ASSIGNMENT ---
+  let lobbyStartingZombies = 1;
 
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'SELECT_ROLE', role }));
+  function updateLobbyZombiesDisplay() {
+    const valEl = document.getElementById('lobby-zombies-count-val');
+    const highlightEl = document.getElementById('zombies-count-text-highlight');
+    const guestValEl = document.getElementById('guest-zombies-val');
+    const ratioEl = document.getElementById('zombies-ratio-preview');
+
+    if (valEl) valEl.textContent = lobbyStartingZombies;
+    if (highlightEl) {
+      highlightEl.textContent = `${lobbyStartingZombies} operative${lobbyStartingZombies > 1 ? 's' : ''}`;
+    }
+    if (guestValEl) guestValEl.textContent = lobbyStartingZombies;
+
+    const totalPlayers = currentRoomData?.players?.length || (cachedLobbyPlayers ? cachedLobbyPlayers.length : 1);
+    const survivors = Math.max(0, totalPlayers - lobbyStartingZombies);
+    if (ratioEl) {
+      ratioEl.textContent = `🎲 ${lobbyStartingZombies} Zombie${lobbyStartingZombies > 1 ? 's' : ''} • ${survivors} Survivor${survivors !== 1 ? 's' : ''}`;
+    }
+  }
+
+  document.getElementById('btn-zombies-minus')?.addEventListener('click', () => {
+    window.soundEngine?.playClick();
+    if (lobbyStartingZombies > 1) {
+      lobbyStartingZombies--;
+      updateLobbyZombiesDisplay();
+      if (ws && ws.readyState === WebSocket.OPEN && isHost) {
+        ws.send(JSON.stringify({ type: 'UPDATE_CONFIG', startingZombiesCount: lobbyStartingZombies }));
       }
-      window.supabaseGameManager.updatePresence({
-        id: myPlayerId,
-        name: document.getElementById('player-name-input').value.trim() || 'Operative',
-        rolePreference: currentRole
-      });
-    });
+    }
   });
 
-  // --- ROLE ASSIGNMENT ALGORITHM (1v1 DUEL & SQUAD SUPPORT) ---
+  document.getElementById('btn-zombies-plus')?.addEventListener('click', () => {
+    window.soundEngine?.playClick();
+    if (lobbyStartingZombies < 10) {
+      lobbyStartingZombies++;
+      updateLobbyZombiesDisplay();
+      if (ws && ws.readyState === WebSocket.OPEN && isHost) {
+        ws.send(JSON.stringify({ type: 'UPDATE_CONFIG', startingZombiesCount: lobbyStartingZombies }));
+      }
+    }
+  });
+
+  // --- 100% RANDOM ROLE ASSIGNMENT ALGORITHM ---
   function assignRolesForPlayers(players) {
     if (!players || players.length === 0) return;
 
-    if (players.length === 2) {
-      // 1v1 Duel Mode: exactly 1 hunter and 1 runner
-      const p1 = players[0];
-      const p2 = players[1];
+    const targetZombies = Math.max(1, lobbyStartingZombies || 1);
+    const N = players.length;
+    const actualZombies = N > 1 ? Math.min(targetZombies, N - 1) : 1;
 
-      if (p1.rolePreference === 'hunter' && p2.rolePreference === 'runner') {
-        p1.assignedRole = 'hunter';
-        p2.assignedRole = 'runner';
-      } else if (p1.rolePreference === 'runner' && p2.rolePreference === 'hunter') {
-        p1.assignedRole = 'runner';
-        p2.assignedRole = 'hunter';
-      } else if (p1.rolePreference === 'hunter') {
-        p1.assignedRole = 'hunter';
-        p2.assignedRole = 'runner';
-      } else if (p2.rolePreference === 'hunter') {
-        p1.assignedRole = 'runner';
-        p2.assignedRole = 'hunter';
-      } else {
-        const rand = Math.random() < 0.5;
-        p1.assignedRole = rand ? 'hunter' : 'runner';
-        p2.assignedRole = rand ? 'runner' : 'hunter';
-      }
-    } else {
-      // Squad Mode: ~1/3 hunters, ~2/3 runners
-      const explicitHunters = players.filter((p) => p.rolePreference === 'hunter');
-      const explicitRunners = players.filter((p) => p.rolePreference === 'runner');
-      const randoms = players.filter((p) => p.rolePreference !== 'hunter' && p.rolePreference !== 'runner');
-
-      const targetHunters = Math.max(1, Math.floor(players.length / 3));
-      const assignedHunters = [];
-      const assignedRunners = [];
-
-      while (explicitHunters.length > 0 && assignedHunters.length < targetHunters) {
-        assignedHunters.push(explicitHunters.pop());
-      }
-      while (explicitHunters.length > 0) {
-        assignedRunners.push(explicitHunters.pop());
-      }
-      while (explicitRunners.length > 0) {
-        assignedRunners.push(explicitRunners.pop());
-      }
-      while (randoms.length > 0 && assignedHunters.length < targetHunters) {
-        assignedHunters.push(randoms.pop());
-      }
-      while (randoms.length > 0) {
-        assignedRunners.push(randoms.pop());
-      }
-
-      if (assignedHunters.length === 0 && assignedRunners.length > 0) {
-        assignedHunters.push(assignedRunners.pop());
-      } else if (assignedRunners.length === 0 && assignedHunters.length > 1) {
-        assignedRunners.push(assignedHunters.pop());
-      }
-
-      assignedHunters.forEach((p) => (p.assignedRole = 'hunter'));
-      assignedRunners.forEach((p) => (p.assignedRole = 'runner'));
+    // Cryptographically fair Fisher-Yates shuffle
+    for (let i = players.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [players[i], players[j]] = [players[j], players[i]];
     }
+
+    players.forEach((p, idx) => {
+      if (idx < actualZombies) {
+        p.assignedRole = 'hunter';
+        p.role = 'hunter';
+      } else {
+        p.assignedRole = 'runner';
+        p.role = 'runner';
+      }
+    });
   }
 
   // --- START GAME (WITH 2-PLAYER 1v1 SUPPORT) ---
@@ -916,44 +1166,62 @@
     handlePhaseChange(huntPayload);
   }
 
-  // --- UPDATE LOBBY UI & 2-PLAYER 1v1 DUEL BADGE ---
+  // --- UPDATE LOBBY UI (OPERATIVES LIST & STARTING ZOMBIES) ---
   function updateLobbyUI(data) {
     const players = data.players || [];
-    document.getElementById('lobby-player-count').textContent = players.length;
+    const countEl = document.getElementById('lobby-player-count');
+    if (countEl) countEl.textContent = players.length;
 
-    const huntersCount = players.filter((p) => p.rolePreference === 'hunter').length;
-    const runnersCount = players.filter((p) => p.rolePreference === 'runner').length;
+    // Check if host
+    if (data.hostId) isHost = (data.hostId === myPlayerId);
 
-    document.getElementById('lobby-hunter-count').textContent = `Hunters: ${huntersCount}`;
-    document.getElementById('lobby-runner-count').textContent = `Runners: ${runnersCount}`;
-
-    const totalVotes = huntersCount + runnersCount || 1;
-    document.getElementById('fairness-hunter-bar').style.width = `${(huntersCount / totalVotes) * 100}%`;
-    document.getElementById('fairness-runner-bar').style.width = `${(runnersCount / totalVotes) * 100}%`;
-
-    // 2-Player 1v1 Duel Detection
-    const duelBadge = document.getElementById('lobby-2player-badge');
-    const startBtn = document.getElementById('btn-start-game');
-    if (players.length === 2) {
-      if (duelBadge) duelBadge.style.display = 'block';
-      if (startBtn) startBtn.textContent = 'LAUNCH 1v1 DUEL';
-    } else {
-      if (duelBadge) duelBadge.style.display = 'none';
-      if (startBtn) startBtn.textContent = 'LAUNCH OPERATION';
+    // Sync startingZombiesCount from config if present
+    if (data.config?.startingZombiesCount) {
+      lobbyStartingZombies = parseInt(data.config.startingZombiesCount, 10);
     }
 
+    const hostStepper = document.getElementById('host-zombies-stepper');
+    const guestIndicator = document.getElementById('guest-zombies-indicator');
+    const startBtn = document.getElementById('btn-start-game');
+    const waitingMsg = document.getElementById('host-waiting-msg');
+
+    if (isHost) {
+      if (hostStepper) hostStepper.style.display = 'flex';
+      if (guestIndicator) guestIndicator.style.display = 'none';
+      if (startBtn) {
+        startBtn.style.display = 'block';
+        startBtn.textContent = `LAUNCH MATCH (${lobbyStartingZombies} ZOMBIE${lobbyStartingZombies > 1 ? 'S' : ''})`;
+      }
+      if (waitingMsg) waitingMsg.style.display = 'none';
+    } else {
+      if (hostStepper) hostStepper.style.display = 'none';
+      if (guestIndicator) guestIndicator.style.display = 'block';
+      if (startBtn) startBtn.style.display = 'none';
+      if (waitingMsg) waitingMsg.style.display = 'block';
+    }
+
+    updateLobbyZombiesDisplay();
+
     const listEl = document.getElementById('lobby-player-list');
-    listEl.innerHTML = '';
-    players.forEach((p) => {
-      const item = document.createElement('div');
-      item.className = 'player-item';
-      const isMe = p.id === myPlayerId;
-      item.innerHTML = `
-        <span>${escapeHtml(p.name)} ${isMe ? '<b>(You)</b>' : ''}</span>
-        <span class="player-role-badge badge-${p.rolePreference}">${p.rolePreference}</span>
-      `;
-      listEl.appendChild(item);
-    });
+    if (listEl) {
+      listEl.innerHTML = '';
+      players.forEach((p, idx) => {
+        const item = document.createElement('div');
+        item.className = 'player-item';
+        const isMe = p.id === myPlayerId;
+        const isPlayerHost = p.id === (data.hostId || (isHost && isMe ? myPlayerId : null));
+        item.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-family: var(--font-mono); font-size: 11px; color: var(--parchment-dim);">#${idx + 1}</span>
+            <span style="font-weight: 700; color: #fff;">${escapeHtml(p.name)} ${isMe ? '<b style="color: var(--parchment);">(You)</b>' : ''}</span>
+          </div>
+          <span class="player-role-badge ${isPlayerHost ? 'badge-host' : 'badge-operative'}" style="font-size: 10px; padding: 3px 8px;">
+            ${isPlayerHost ? 'HOST' : 'OPERATIVE'}
+          </span>
+        `;
+        listEl.appendChild(item);
+      });
+    }
   }
 
   function formatTime(sec) {
@@ -991,44 +1259,24 @@
           activeGameClockInterval = null;
           triggerHuntPhaseTransition();
         }
-      } else if (state === 'HUNT') {
-        const hInterval = currentRoomConfig.hunterPingInterval || 30;
-        const rInterval = currentRoomConfig.runnerPingInterval || 50;
-
-        const hPingIn = hInterval - (elapsed % hInterval);
-        const rPingIn = rInterval - (elapsed % rInterval);
-
+      } else if (state === 'HUNT' || state === 'THE_HUNT' || state === 'EXTRACTION') {
         handleClockTick({
           state: 'HUNT',
-          timeRemaining: remaining,
-          hunterPingIn: hPingIn,
-          runnerPingIn: rPingIn,
-          nextPingIn: rPingIn
+          timeRemaining: remaining
         });
-
-        // Trigger radar pings on interval completion
-        if (elapsed > 0 && elapsed % hInterval === 0 && lastHunterPingSec !== elapsed) {
-          lastHunterPingSec = elapsed;
-          triggerPeerOrLocalPing('hunter');
-        }
-        if (elapsed > 0 && elapsed % rInterval === 0 && lastRunnerPingSec !== elapsed) {
-          lastRunnerPingSec = elapsed;
-          triggerPeerOrLocalPing('runner');
-        }
 
         if (remaining <= 0) {
           clearInterval(activeGameClockInterval);
           activeGameClockInterval = null;
           const gameOverPayload = {
-            winner: 'runners',
+            winner: 'survivors',
             reason: 'SURVIVAL_TIME_EXPIRED',
             stats: {
-              durationSeconds: totalDuration,
-              totalPings: Math.floor(elapsed / rInterval)
+              durationSeconds: totalDuration
             }
           };
           if (isHost) {
-            window.supabaseGameManager.broadcastEvent('game_over', gameOverPayload);
+            window.supabaseGameManager?.broadcastEvent?.('game_over', gameOverPayload);
           }
           handleGameOver(gameOverPayload);
         }
@@ -1073,8 +1321,10 @@
 
   // --- PHASE MANAGEMENT ---
   function handlePhaseChange(data) {
+    requestScreenWakeLock();
     const payload = data.payload ? { ...data.payload, ...data } : data;
     currentRoomData = Object.assign(currentRoomData || {}, payload);
+    if (payload.state) currentPhase = payload.state;
 
     if (payload.config) {
       currentRoomConfig = Object.assign(currentRoomConfig, payload.config);
@@ -1087,9 +1337,9 @@
 
     const me = payload.players?.find((p) => p.id === myPlayerId);
     if (me && me.assignedRole) {
-      myAssignedRole = me.assignedRole;
+      myAssignedRole = (me.assignedRole === 'hunter' || me.assignedRole === 'zombie') ? 'zombie' : 'survivor';
     } else if (!myAssignedRole) {
-      myAssignedRole = currentRole === 'hunter' ? 'hunter' : 'runner';
+      myAssignedRole = (currentRole === 'zombie' || currentRole === 'hunter') ? 'zombie' : 'survivor';
     }
 
     const startTime = payload.startTime || Date.now();
@@ -1097,29 +1347,31 @@
 
     if (payload.state === 'HEAD_START') {
       showScreen('scatter');
+      window.soundEngine?.playBell?.();
       window.soundEngine?.playHeartbeat();
 
-      const isRunner = myAssignedRole === 'runner';
+      const isRunner = myAssignedRole === 'survivor' || myAssignedRole === 'runner';
       const roleTag = document.getElementById('scatter-role-badge');
       const actionWord = document.getElementById('scatter-action-word');
       const descText = document.getElementById('scatter-desc-text');
 
       if (isRunner) {
-        roleTag.textContent = 'YOUR ROLE · RUNNER';
+        roleTag.textContent = 'YOUR ROLE · SURVIVOR';
         actionWord.textContent = 'RUN.';
         actionWord.style.color = 'var(--parchment)';
-        descText.textContent = 'Scatter and find cover inside the perimeter. Hunters are counting down.';
+        descText.textContent = 'Scatter and find cover inside the perimeter. Zombies are counting down.';
       } else {
-        roleTag.textContent = 'YOUR ROLE · HUNTER';
+        roleTag.textContent = 'YOUR ROLE · ZOMBIE';
         actionWord.textContent = 'STAND BY.';
-        actionWord.style.color = '#60a5fa';
-        descText.textContent = 'Runners are scattering to hide. Maintain your position. No peeking.';
+        actionWord.style.color = '#ec3013';
+        descText.textContent = 'Survivors are scattering to hide. Maintain your position. Prepare to hunt.';
       }
 
       startClientGameClock('HEAD_START', startTime, duration);
       startLocationTracking();
-    } else if (payload.state === 'HUNT') {
+    } else if (payload.state === 'HUNT' || payload.state === 'THE_HUNT' || payload.state === 'EXTRACTION') {
       showScreen('hunt');
+      window.soundEngine?.playBell?.();
       window.soundEngine?.playPing();
       initGameMap();
       updateGameHUD();
@@ -1142,7 +1394,7 @@
       if (data.timeRemaining <= 10 && data.timeRemaining > 0) {
         window.soundEngine?.playHeartbeat(true);
       }
-    } else if (data.state === 'HUNT') {
+    } else if (data.state === 'HUNT' || data.state === 'THE_HUNT' || data.state === 'EXTRACTION') {
       const gameClock = document.getElementById('hud-game-clock');
       if (gameClock) gameClock.textContent = formatTime(data.timeRemaining);
 
@@ -1185,145 +1437,179 @@
       radius: arena.radius
     }).addTo(gameMap);
 
-    const isHunter = myAssignedRole === 'hunter';
-    const markerColor = isHunter ? '#3b82f6' : '#F9E8AC';
+    function getLocalPlayerIcon() {
+      const isZombie = myAssignedRole === 'zombie' || myAssignedRole === 'hunter' || currentRole === 'zombie';
+      const markerColor = isZombie ? '#ec3013' : '#2563eb';
+      const markerGlow = isZombie ? 'rgba(236, 48, 19, 0.9)' : 'rgba(37, 99, 235, 0.9)';
+      const roleIcon = isZombie ? '💀' : '🏃';
 
-    const playerIcon = L.divIcon({
-      className: 'local-player-icon',
-      html: `
-        <div style="position:relative; width: 22px; height: 22px;">
-          <div style="width: 18px; height: 18px; background: ${markerColor}; border: 3px solid #fff; border-radius: 50%; box-shadow: 0 0 16px ${markerColor};"></div>
-        </div>
-      `,
-      iconSize: [22, 22],
-      iconAnchor: [11, 11]
-    });
+      return L.divIcon({
+        className: 'local-player-icon',
+        html: `
+          <div style="position:relative; width: 26px; height: 26px;">
+            <div style="position:absolute; inset:-4px; border-radius:50%; border:2px solid ${markerColor}; animation: peerPulse 2s infinite ease-out; opacity:0.8;"></div>
+            <div style="width: 22px; height: 22px; background: ${markerColor}; border: 3px solid #ffffff; border-radius: 50%; box-shadow: 0 0 16px ${markerGlow}; display:flex; align-items:center; justify-content:center; color:#fff; font-size:11px;">
+              ${roleIcon}
+            </div>
+          </div>
+        `,
+        iconSize: [26, 26],
+        iconAnchor: [13, 13]
+      });
+    }
 
-    myMarker = L.marker([myPosition.lat, myPosition.lng], { icon: playerIcon }).addTo(gameMap);
+    myMarker = L.marker([myPosition.lat, myPosition.lng], { icon: getLocalPlayerIcon() }).addTo(gameMap);
     gameMap.panTo([myPosition.lat, myPosition.lng]);
+
+    // Track user map dragging so auto-center doesn't fight manual inspection
+    gameMap.on('dragstart', () => {
+      userIsDraggingMap = true;
+      if (userDragTimeout) clearTimeout(userDragTimeout);
+    });
+    gameMap.on('dragend', () => {
+      if (userDragTimeout) clearTimeout(userDragTimeout);
+      userDragTimeout = setTimeout(() => {
+        userIsDraggingMap = false;
+      }, 7000);
+    });
 
     setupJoystick();
   }
 
-  function updateGameHUD() {
-    const isHunter = myAssignedRole === 'hunter';
-    const rolePill = document.getElementById('hud-role-pill');
-    const tagBtn = document.getElementById('btn-tag-action');
-    const runnerTagBtn = document.getElementById('btn-runner-tagged-action');
+  function updateMyMarkerVisual() {
+    if (myMarker && typeof myMarker.setIcon === 'function') {
+      const isZombie = myAssignedRole === 'zombie' || myAssignedRole === 'hunter' || currentRole === 'zombie';
+      const markerColor = isZombie ? '#ec3013' : '#2563eb';
+      const markerGlow = isZombie ? 'rgba(236, 48, 19, 0.9)' : 'rgba(37, 99, 235, 0.9)';
+      const roleIcon = isZombie ? '💀' : '🏃';
 
-    if (isHunter) {
-      rolePill.textContent = 'HUNTER';
-      rolePill.className = 'player-role-badge badge-hunter';
-      tagBtn.style.display = 'block';
-      runnerTagBtn.style.display = 'none';
+      myMarker.setIcon(
+        L.divIcon({
+          className: 'local-player-icon',
+          html: `
+            <div style="position:relative; width: 26px; height: 26px;">
+              <div style="position:absolute; inset:-4px; border-radius:50%; border:2px solid ${markerColor}; animation: peerPulse 2s infinite ease-out; opacity:0.8;"></div>
+              <div style="width: 22px; height: 22px; background: ${markerColor}; border: 3px solid #ffffff; border-radius: 50%; box-shadow: 0 0 16px ${markerGlow}; display:flex; align-items:center; justify-content:center; color:#fff; font-size:11px;">
+                ${roleIcon}
+              </div>
+            </div>
+          `,
+          iconSize: [26, 26],
+          iconAnchor: [13, 13]
+        })
+      );
+    }
+  }
+
+  function updateGameHUD() {
+    const isZombie = myAssignedRole === 'zombie' || myAssignedRole === 'hunter';
+    const rolePill = document.getElementById('hud-role-pill');
+    const zombieControls = document.getElementById('zombie-action-controls');
+    const survivorControls = document.getElementById('survivor-action-controls');
+
+    if (isZombie) {
+      if (rolePill) {
+        rolePill.textContent = 'ZOMBIE';
+        rolePill.className = 'player-role-badge badge-zombie';
+      }
+      if (zombieControls) zombieControls.style.display = 'flex';
+      if (survivorControls) survivorControls.style.display = 'none';
     } else {
-      rolePill.textContent = 'RUNNER';
-      rolePill.className = 'player-role-badge badge-runner';
-      tagBtn.style.display = 'none';
-      runnerTagBtn.style.display = 'block';
+      if (rolePill) {
+        rolePill.textContent = 'SURVIVOR';
+        rolePill.className = 'player-role-badge badge-survivor';
+      }
+      if (zombieControls) zombieControls.style.display = 'none';
+      if (survivorControls) survivorControls.style.display = 'flex';
     }
 
     updateRunnersAliveCount();
+    updateMyMarkerVisual();
   }
 
   function updateRunnersAliveCount() {
-    if (!currentRoomData) {
-      currentRoomData = { players: [] };
-    }
-    if (!currentRoomData.players) {
-      currentRoomData.players = [];
-    }
+    if (!currentRoomData) currentRoomData = { players: [] };
+    if (!currentRoomData.players) currentRoomData.players = [];
 
     const allPlayersMap = new Map();
 
-    // 1. Ingest from currentRoomData.players
-    currentRoomData.players.forEach((p) => {
+    // 1. Ingest players from authoritative currentRoomData
+    (currentRoomData.players || []).forEach((p) => {
       if (p && p.id) allPlayersMap.set(p.id, { ...p });
     });
 
     // 2. Ingest from cached presence players
     (cachedLobbyPlayers || []).forEach((p) => {
-      if (p && p.id) {
-        if (!allPlayersMap.has(p.id)) {
-          allPlayersMap.set(p.id, { ...p });
-        } else {
-          const prev = allPlayersMap.get(p.id);
-          allPlayersMap.set(p.id, { ...prev, ...p });
-        }
+      if (p && p.id && !allPlayersMap.has(p.id)) {
+        allPlayersMap.set(p.id, { ...p });
       }
     });
 
-    // 3. Register self with accurate role
-    const myName = document.getElementById('player-name-input').value.trim() || 'Operative';
-    const amHunter = myAssignedRole === 'hunter' || currentRole === 'hunter' || (isHost && !myAssignedRole);
-    const mySelfRole = amHunter ? 'hunter' : 'runner';
-    if (!myAssignedRole) {
-      myAssignedRole = mySelfRole;
-    }
+    // 3. Ensure self is registered with active assignedRole
+    const myName = document.getElementById('player-name-input')?.value?.trim() || 'Operative';
+    const isSelfZombie = myAssignedRole === 'zombie' || myAssignedRole === 'hunter' || currentRole === 'zombie';
+    const selfRole = isSelfZombie ? 'zombie' : 'survivor';
 
     if (!allPlayersMap.has(myPlayerId)) {
       allPlayersMap.set(myPlayerId, {
         id: myPlayerId,
         name: myName,
-        assignedRole: mySelfRole,
-        rolePreference: mySelfRole,
-        role: mySelfRole,
-        isTagged: false
+        assignedRole: selfRole,
+        isTagged: isSelfZombie
       });
     } else {
       const me = allPlayersMap.get(myPlayerId);
-      me.assignedRole = me.assignedRole || mySelfRole;
-      me.role = me.role || mySelfRole;
-    }
-
-    // 4. Role inference: If local user is Hunter, any OTHER connected operative who is not explicitly a hunter is a RUNNER
-    if (amHunter) {
-      allPlayersMap.forEach((p, pid) => {
-        if (pid !== myPlayerId) {
-          const r = (p.assignedRole || p.rolePreference || p.role || '').toLowerCase();
-          if (r !== 'hunter') {
-            p.assignedRole = 'runner';
-            p.role = 'runner';
-          }
-        }
-      });
-    }
-
-    // 5. In a 2-player match, if one player is hunter, the other must be runner
-    if (allPlayersMap.size === 2) {
-      const pList = Array.from(allPlayersMap.values());
-      const hunterPlayer = pList.find((p) => (p.assignedRole || p.rolePreference || p.role) === 'hunter');
-      if (hunterPlayer) {
-        pList.forEach((p) => {
-          if (p.id !== hunterPlayer.id) {
-            p.assignedRole = 'runner';
-            p.role = 'runner';
-          }
-        });
-      }
+      if (!me.assignedRole) me.assignedRole = selfRole;
     }
 
     const playersList = Array.from(allPlayersMap.values());
     currentRoomData.players = playersList;
 
-    // Filter runners (anyone whose assignedRole, role, or rolePreference is 'runner')
-    let runners = playersList.filter((p) => {
-      const role = (p.assignedRole || p.rolePreference || p.role || '').toLowerCase();
-      return role === 'runner';
+    // Categorize
+    let survivorsCount = 0;
+    let survivorsAlive = 0;
+    let zombiesCount = 0;
+    let escapedCount = 0;
+
+    playersList.forEach((p) => {
+      const r = (p.assignedRole || p.role || p.rolePreference || '').toLowerCase();
+      const isZombie = r === 'zombie' || r === 'hunter' || Boolean(p.isTagged);
+      if (isZombie) {
+        zombiesCount++;
+      } else {
+        survivorsCount++;
+        if (p.escaped) {
+          escapedCount++;
+        } else {
+          survivorsAlive++;
+        }
+      }
     });
 
-    // If local player is a runner, ensure we have at least 1 runner (ourselves)
-    if (!amHunter && runners.length === 0) {
-      const selfObj = allPlayersMap.get(myPlayerId);
-      if (selfObj) runners.push(selfObj);
-    }
+    const totalPlayers = playersList.length;
 
-    const alive = runners.filter((p) => !p.isTagged).length;
-    const total = runners.length;
-
+    // Update bottom sheet counters
     const countEl = document.getElementById('hud-runners-alive');
-    if (countEl) {
-      countEl.textContent = `${alive} of ${total}`;
+    if (countEl) countEl.textContent = `${survivorsAlive} of ${survivorsCount}`;
+
+    const zCountEl = document.getElementById('hud-zombies-count');
+    if (zCountEl) zCountEl.textContent = `${zombiesCount}`;
+
+    // Update top live stats telemetry strip
+    const statTotalEl = document.getElementById('hud-stat-total-players');
+    if (statTotalEl) statTotalEl.textContent = `${totalPlayers}`;
+
+    const statSurvEl = document.getElementById('hud-stat-survivors-count');
+    if (statSurvEl) statSurvEl.textContent = `${survivorsAlive}`;
+
+    const statZombEl = document.getElementById('hud-stat-zombies-count');
+    if (statZombEl) statZombEl.textContent = `${zombiesCount}`;
+
+    const statEscCell = document.getElementById('hud-stat-escaped-cell');
+    const statEscEl = document.getElementById('hud-stat-escaped-count');
+    if (statEscEl) statEscEl.textContent = `${escapedCount}`;
+    if (statEscCell) {
+      statEscCell.style.display = escapedCount > 0 || currentPhase === 'EXTRACTION' ? 'flex' : 'none';
     }
   }
 
@@ -1394,7 +1680,7 @@
     }
   }
 
-  // Update Fellow Hunter Positions
+  // Update Fellow Hunter Positions (Zombies in red)
   function updateHunterPositions(hunters) {
     if (!gameMap) return;
 
@@ -1405,7 +1691,7 @@
         const icon = L.divIcon({
           className: 'teammate-hunter-icon',
           html: `
-            <div style="background: var(--hunter-blue); color:#fff; font-size:10px; font-weight:800; border:2px solid var(--parchment); border-radius:50%; width:22px; height:22px; display:flex; align-items:center; justify-content:center; box-shadow:0 0 10px rgba(59,130,246,0.6);">
+            <div style="background: #ec3013; color:#fff; font-size:10px; font-weight:800; border:2px solid #ffffff; border-radius:50%; width:22px; height:22px; display:flex; align-items:center; justify-content:center; box-shadow:0 0 12px rgba(236,48,19,0.85);">
               ${escapeHtml(h.name.substring(0, 2).toUpperCase())}
             </div>
           `,
@@ -1416,6 +1702,597 @@
         hunterMarkers.set(h.id, marker);
       }
     });
+  }
+
+  // Tactical Radar Live Peer & Opponent Map Markers
+  // Zombies are ALWAYS RED (#ec3013), Survivors are ALWAYS BLUE (#2563eb)
+  function createPeerIcon(p) {
+    const isZombie = p.role === 'zombie' || p.role === 'hunter';
+    const isTeammate = Boolean(p.isTeammate);
+    const isInfectious = Boolean(p.isInfectious);
+
+    let markerClass = isZombie
+      ? ('peer-zombie-marker' + (isInfectious ? ' is-infectious' : ''))
+      : 'peer-survivor-marker';
+    let pulseClass = isZombie ? 'crimson-pulse' : 'blue-pulse';
+    let badgeContent = isZombie ? (isInfectious ? '☣️' : '💀') : (isTeammate ? '🛡️' : '🏃');
+
+    const shortName = (p.name || 'Operative').slice(0, 10);
+
+    return L.divIcon({
+      className: 'tactical-peer-icon-container',
+      html: `
+        <div class="peer-tactical-marker ${markerClass}" data-peer-id="${escapeHtml(p.id)}">
+          <div class="peer-radar-pulse ${pulseClass}"></div>
+          <div class="peer-core-badge">${badgeContent}</div>
+          <div class="peer-callsign-pill">${escapeHtml(shortName)}</div>
+        </div>
+      `,
+      iconSize: [28, 28],
+      iconAnchor: [14, 14]
+    });
+  }
+
+  function updatePeerMapMarkers(blips, pruneOthers = true) {
+    if (!gameMap || !Array.isArray(blips)) return;
+
+    const activeIds = new Set();
+
+    blips.forEach((p) => {
+      if (!p || p.id === myPlayerId) return;
+      if (!Number.isFinite(p.lat) || !Number.isFinite(p.lng)) return;
+
+      activeIds.add(p.id);
+
+      const distLabel = typeof p.dist === 'number' ? ` · ${p.dist}m` : '';
+      const roleLabel = (p.role === 'zombie' || p.role === 'hunter') ? 'ZOMBIE' : 'SURVIVOR';
+      const statusLabel = p.isInfectious ? ' [INFECTIOUS]' : (p.isFreshMeat ? ' [FRESH MEAT]' : '');
+      const tooltipText = `<b>${escapeHtml(p.name || 'Operative')}</b> (${roleLabel}${statusLabel}${distLabel})`;
+
+      if (peerMarkers.has(p.id)) {
+        const entry = peerMarkers.get(p.id);
+        entry.marker.setLatLng([p.lat, p.lng]);
+        if (entry.marker.getTooltip()) {
+          entry.marker.setTooltipContent(tooltipText);
+        }
+
+        // Refresh icon if role or infection status toggles
+        if (entry.isInfectious !== Boolean(p.isInfectious) || entry.role !== p.role) {
+          entry.role = p.role;
+          entry.isInfectious = Boolean(p.isInfectious);
+          entry.marker.setIcon(createPeerIcon(p));
+        }
+      } else {
+        const icon = createPeerIcon(p);
+        const marker = L.marker([p.lat, p.lng], {
+          icon,
+          zIndexOffset: p.isInfectious ? 1000 : 500
+        }).addTo(gameMap);
+
+        marker.bindTooltip(tooltipText, {
+          permanent: false,
+          direction: 'top',
+          className: 'tactical-peer-tooltip'
+        });
+
+        peerMarkers.set(p.id, {
+          marker,
+          role: p.role,
+          isInfectious: Boolean(p.isInfectious)
+        });
+      }
+    });
+
+    if (pruneOthers) {
+      for (const [id, entry] of peerMarkers.entries()) {
+        if (!activeIds.has(id)) {
+          if (gameMap.hasLayer(entry.marker)) {
+            gameMap.removeLayer(entry.marker);
+          }
+          peerMarkers.delete(id);
+        }
+      }
+    }
+  }
+
+  function setClientOutOfBounds(isOob, serverRemaining) {
+    const oobOverlay = document.getElementById('out-of-bounds-overlay');
+    const boundaryAlert = document.getElementById('boundary-alert');
+    const timerVal = document.getElementById('oob-timer-val');
+    const progressFill = document.getElementById('oob-progress-fill');
+
+    // Only active during match phases
+    const activeState = currentPhase || currentRoomData?.state || (document.getElementById('screen-hunt')?.classList.contains('active') ? 'THE_HUNT' : 'LOBBY');
+    const inActiveMatch = activeState === 'HEAD_START' || activeState === 'THE_HUNT' || activeState === 'HUNT' || activeState === 'EXTRACTION';
+
+    if (!inActiveMatch || !isOob) {
+      if (clientOobState.active || (oobOverlay && oobOverlay.style.display !== 'none')) {
+        clientOobState.active = false;
+        if (clientOobState.intervalId) {
+          clearInterval(clientOobState.intervalId);
+          clientOobState.intervalId = null;
+        }
+        if (oobOverlay) oobOverlay.style.display = 'none';
+        if (boundaryAlert) boundaryAlert.style.display = 'none';
+        if (timerVal) timerVal.textContent = '60s';
+        if (progressFill) progressFill.style.width = '100%';
+      }
+      return;
+    }
+
+    // Operative IS Out of Bounds!
+    if (!clientOobState.active) {
+      clientOobState.active = true;
+      clientOobState.remainingSeconds = typeof serverRemaining === 'number' ? serverRemaining : 60;
+      if (oobOverlay) oobOverlay.style.display = 'flex';
+      if (boundaryAlert) boundaryAlert.style.display = 'block';
+
+      if (clientOobState.intervalId) clearInterval(clientOobState.intervalId);
+      clientOobState.intervalId = setInterval(() => {
+        if (!clientOobState.active) {
+          clearInterval(clientOobState.intervalId);
+          clientOobState.intervalId = null;
+          return;
+        }
+        clientOobState.remainingSeconds = Math.max(0, clientOobState.remainingSeconds - 1);
+        updateOobDisplay();
+      }, 1000);
+    } else if (typeof serverRemaining === 'number') {
+      // Authoritative sync from server
+      clientOobState.remainingSeconds = serverRemaining;
+    }
+
+    updateOobDisplay();
+  }
+
+  function updateOobDisplay() {
+    const timerVal = document.getElementById('oob-timer-val');
+    const progressFill = document.getElementById('oob-progress-fill');
+    const zoneNameEl = document.getElementById('hud-zone-name');
+    const threatTextEl = document.getElementById('hud-threat-text');
+    const rem = clientOobState.remainingSeconds;
+
+    if (timerVal) {
+      timerVal.textContent = `${rem}s`;
+      timerVal.style.color = rem <= 15 ? '#ff0000' : '#ffffff';
+    }
+
+    if (progressFill) {
+      const pct = Math.max(0, Math.min(100, (rem / 60) * 100));
+      progressFill.style.width = `${pct}%`;
+      progressFill.style.background = pct <= 25 ? '#ff0000' : 'linear-gradient(90deg, #ff3131, #ff9100)';
+    }
+
+    if (clientOobState.active) {
+      if (zoneNameEl) {
+        zoneNameEl.textContent = `PERIMETER BREACH! (${rem}s TO ELIMINATION)`;
+        zoneNameEl.style.color = '#ff3131';
+      }
+      if (threatTextEl) {
+        threatTextEl.textContent = `⚠️ OUT OF BOUNDS (${rem}s)`;
+        threatTextEl.style.color = '#ff3131';
+      }
+    }
+
+    // Audio/tactile feedback on mobile in critical countdown zone
+    if (clientOobState.active && rem <= 10 && rem > 0 && navigator.vibrate) {
+      try {
+        navigator.vibrate(rem <= 5 ? [150, 80, 150] : [100]);
+      } catch (e) {}
+    }
+  }
+
+  // --- ZOMBIES GAME MECHANICS HANDLERS ---
+
+  function handleRadarUpdate(msg) {
+    if (msg.myBounties !== undefined) myBounties = msg.myBounties;
+    if (msg.myPowerups !== undefined) myPowerups = msg.myPowerups;
+    if (msg.myActiveEffects !== undefined) myActiveEffects = msg.myActiveEffects;
+    if (msg.isInfectious !== undefined) isInfectiousState = msg.isInfectious;
+    if (msg.infectCooldownRemaining !== undefined) infectCooldownRemaining = msg.infectCooldownRemaining;
+
+    // Handle 60s Out of Bounds Red Alert & Accurate On-Screen Countdown
+    setClientOutOfBounds(Boolean(msg.outOfBounds), msg.outOfBoundsRemaining);
+
+    // Update authoritative live match statistics across all devices
+    if (msg.playersCount !== undefined) {
+      const statTotal = document.getElementById('hud-stat-total-players');
+      const statSurv = document.getElementById('hud-stat-survivors-count');
+      const statZomb = document.getElementById('hud-stat-zombies-count');
+      const statEsc = document.getElementById('hud-stat-escaped-count');
+      const statEscCell = document.getElementById('hud-stat-escaped-cell');
+      const countEl = document.getElementById('hud-runners-alive');
+      const zCountEl = document.getElementById('hud-zombies-count');
+
+      if (statTotal) statTotal.textContent = String(msg.playersCount);
+      if (statSurv) statSurv.textContent = String(msg.survivorsCount);
+      if (statZomb) statZomb.textContent = String(msg.zombiesCount);
+      if (statEsc) statEsc.textContent = String(msg.escapedCount || 0);
+      if (statEscCell) statEscCell.style.display = (msg.escapedCount > 0 || currentPhase === 'EXTRACTION') ? 'flex' : 'none';
+
+      if (countEl) countEl.textContent = `${msg.survivorsCount} ALIVE`;
+      if (zCountEl) zCountEl.textContent = String(msg.zombiesCount);
+    }
+
+    // 1. Health Coins removed per design requirement
+    // 2. Update 2 Powerup Slots
+    const slot0Label = document.getElementById('slot-0-label');
+    const slot1Label = document.getElementById('slot-1-label');
+    const btnSlot0 = document.getElementById('btn-powerup-slot-0');
+    const btnSlot1 = document.getElementById('btn-powerup-slot-1');
+
+    if (myPowerups[0]) {
+      const def = CLIENT_POWERUP_CATALOG[myPowerups[0]];
+      if (slot0Label) slot0Label.textContent = def ? def.name.toUpperCase() : myPowerups[0];
+      if (btnSlot0) btnSlot0.classList.add('has-powerup');
+    } else {
+      if (slot0Label) slot0Label.textContent = 'EMPTY';
+      if (btnSlot0) btnSlot0.classList.remove('has-powerup');
+    }
+
+    if (myPowerups[1]) {
+      const def = CLIENT_POWERUP_CATALOG[myPowerups[1]];
+      if (slot1Label) slot1Label.textContent = def ? def.name.toUpperCase() : myPowerups[1];
+      if (btnSlot1) btnSlot1.classList.add('has-powerup');
+    } else {
+      if (slot1Label) slot1Label.textContent = 'EMPTY';
+      if (btnSlot1) btnSlot1.classList.remove('has-powerup');
+    }
+
+    // 3. Update Zombie Infect Button State
+    const infectBtn = document.getElementById('btn-zombie-infect-burst');
+    const infectLabel = document.getElementById('infect-burst-label');
+    if (infectBtn && infectLabel) {
+      if (isInfectiousState) {
+        infectBtn.className = 'btn btn-tag-action btn-infect-burst is-infectious';
+        infectLabel.textContent = 'INFECTIOUS! (BURST ACTIVE)';
+      } else if (infectCooldownRemaining > 0) {
+        infectBtn.className = 'btn btn-tag-action btn-infect-burst is-cooldown';
+        infectLabel.textContent = `RECHARGING (${infectCooldownRemaining}s)`;
+      } else {
+        infectBtn.className = 'btn btn-tag-action btn-infect-burst';
+        infectLabel.textContent = 'TAP TO INFECT (10s BURST)';
+      }
+    }
+
+    // 4. Update Zones on Map
+    if (gameMap && msg.zones) {
+      msg.zones.forEach((zone) => {
+        if (zone.lat === undefined || zone.lng === undefined) return;
+        if (!zoneMarkers.has(zone.id)) {
+          let zoneColor = '#60a5fa';
+          let zoneFill = '#60a5fa';
+          if (zone.type === 'HEALTH_ZONE') {
+            zoneColor = '#10b981';
+            zoneFill = '#10b981';
+          } else if (zone.type === 'HEALTH_PLUS_ZONE') {
+            zoneColor = '#ffab00';
+            zoneFill = '#ffab00';
+          } else if (zone.type === 'EXTRACTION_ZONE') {
+            zoneColor = '#f59e0b';
+            zoneFill = '#ec3013';
+          }
+
+          const circle = L.circle([zone.lat, zone.lng], {
+            color: zoneColor,
+            fillColor: zoneFill,
+            fillOpacity: zone.active ? 0.25 : 0.08,
+            weight: 2,
+            radius: zone.radius
+          }).addTo(gameMap);
+
+          circle.bindTooltip(`<b>${zone.name}</b>`, { permanent: false, direction: 'top' });
+          zoneMarkers.set(zone.id, circle);
+        } else {
+          const circle = zoneMarkers.get(zone.id);
+          circle.setLatLng([zone.lat, zone.lng]);
+          if (zone.type === 'EXTRACTION_ZONE') {
+            circle.setStyle({ fillOpacity: zone.active ? 0.35 : 0.08, color: zone.active ? '#ffab00' : '#888' });
+          }
+        }
+      });
+    }
+
+    // 5. Update Threat / Zone Status in HUD
+    const zoneNameEl = document.getElementById('hud-zone-name');
+    const threatTextEl = document.getElementById('hud-threat-text');
+
+    if (zoneNameEl && msg.zones) {
+      const activeZone = msg.zones.find((z) => z.dist <= z.radius);
+      if (activeZone) {
+        if (activeZone.type === 'HEALTH_ZONE') {
+          zoneNameEl.textContent = `${activeZone.name.toUpperCase()} (+2 HP/s)`;
+          zoneNameEl.style.color = '#10b981';
+        } else if (activeZone.type === 'HEALTH_PLUS_ZONE') {
+          zoneNameEl.textContent = `${activeZone.name.toUpperCase()} (SHOP READY)`;
+          zoneNameEl.style.color = '#ffab00';
+        } else if (activeZone.type === 'ARENA_CENTER') {
+          zoneNameEl.textContent = 'ARENA HUB (ZOMBIE BASE)';
+          zoneNameEl.style.color = '#60a5fa';
+        } else if (activeZone.type === 'EXTRACTION_ZONE') {
+          zoneNameEl.textContent = activeZone.active ? 'EXTRACTION ZONE OPEN! ESCAPE NOW' : 'EXTRACTION LOCKED';
+          zoneNameEl.style.color = '#ffab00';
+        }
+      } else {
+        zoneNameEl.textContent = 'OPEN GROUND (DECAY ACTIVE)';
+        zoneNameEl.style.color = 'var(--runner-gold)';
+      }
+    }
+
+    if (threatTextEl) {
+      if (myActiveEffects?.cloaked) {
+        threatTextEl.textContent = 'CLOAK ACTIVE 🥷';
+        threatTextEl.style.color = '#10b981';
+      } else if (msg.freshMeatTarget) {
+        threatTextEl.textContent = `FRESH MEAT: ${msg.freshMeatTarget.name} (${msg.freshMeatTarget.dist}m)`;
+        threatTextEl.style.color = '#ec3013';
+      } else {
+        threatTextEl.textContent = isZombie ? 'HUNTING' : 'SURVIVING';
+        threatTextEl.style.color = isZombie ? '#ec3013' : 'var(--runner-gold)';
+      }
+    }
+
+    // 6. 15-Meter Zombie Proximity Early Warning Sonar Beep
+    const isZombieRole = myAssignedRole === 'zombie' || myAssignedRole === 'hunter' || currentRole === 'zombie';
+    const isSurvivor = !isZombieRole;
+    const proxBanner = document.getElementById('proximity-warning-banner');
+    const proxText = document.getElementById('proximity-warning-text');
+
+    if (isSurvivor && msg.blips && Array.isArray(msg.blips)) {
+      let nearestZombieDist = Infinity;
+      let nearestZombieName = '';
+      for (const b of msg.blips) {
+        const isEnemyZombie = (b.role === 'zombie' || b.role === 'hunter') && !b.isCloaked;
+        if (isEnemyZombie && typeof b.dist === 'number') {
+          if (b.dist < nearestZombieDist) {
+            nearestZombieDist = b.dist;
+            nearestZombieName = b.name || 'Zombie';
+          }
+        }
+      }
+
+      if (nearestZombieDist <= 15) {
+        if (proxBanner) proxBanner.style.display = 'flex';
+        if (proxText) proxText.textContent = `⚠️ ZOMBIE (${nearestZombieName}) AT ${Math.round(nearestZombieDist)}m! RUN!`;
+
+        const now = Date.now();
+        const cadence = nearestZombieDist <= 5 ? 250 : (nearestZombieDist <= 10 ? 500 : 1000);
+        if (now - lastProximityBeepTime >= cadence) {
+          lastProximityBeepTime = now;
+          window.soundEngine?.playProximityBeep(nearestZombieDist);
+          if (navigator.vibrate) {
+            try { navigator.vibrate(nearestZombieDist <= 5 ? [150, 50, 150] : [80]); } catch (e) {}
+          }
+        }
+      } else {
+        if (proxBanner) proxBanner.style.display = 'none';
+      }
+    } else {
+      if (proxBanner) proxBanner.style.display = 'none';
+    }
+
+    // 7. Update Live Peer & Opponent Radar Markers on Map
+    if (msg.blips && Array.isArray(msg.blips)) {
+      updatePeerMapMarkers(msg.blips, true);
+    }
+  }
+
+  function handleZombieInfectionTriggered(msg) {
+    window.soundEngine?.playTagAlarm();
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+
+    const boundaryAlert = document.getElementById('boundary-alert');
+    if (boundaryAlert) {
+      boundaryAlert.textContent = `☣️ ZOMBIE BURST! ${msg.zombieName} is INFECTIOUS for ${msg.duration}s!`;
+      boundaryAlert.style.borderColor = '#ec3013';
+      boundaryAlert.style.display = 'block';
+      setTimeout(() => (boundaryAlert.style.display = 'none'), 3500);
+    }
+  }
+
+  function handleZombieInfectionExpired(msg) {
+    if (msg.zombieId === myPlayerId) {
+      isInfectiousState = false;
+    }
+  }
+
+  function handleChaseWarning(msg) {
+    const alertEl = document.getElementById('boundary-alert');
+    if (!alertEl) return;
+
+    if (msg.survivorId === myPlayerId) {
+      // Local player is the SURVIVOR being chased!
+      alertEl.innerHTML = `⚠️ <b>ZOMBIE ON YOUR TAIL!</b> ${escapeHtml(msg.zombieName)} is ${msg.distance}m away!<br>RUN! Infection in <b>${msg.secondsRemaining}s</b>`;
+      alertEl.style.borderColor = '#ec3013';
+      alertEl.style.color = '#ffffff';
+      alertEl.style.background = 'rgba(236, 48, 19, 0.95)';
+      alertEl.style.display = 'block';
+      if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+    } else if (msg.zombieId === myPlayerId) {
+      // Local player is the ZOMBIE chasing!
+      alertEl.innerHTML = `🎯 <b>LOCKING IN!</b> Within ${msg.distance}m of ${escapeHtml(msg.survivorName)}!<br>Hold distance for <b>${msg.secondsRemaining}s</b> to infect!`;
+      alertEl.style.borderColor = '#2563eb';
+      alertEl.style.color = '#ffffff';
+      alertEl.style.background = 'rgba(37, 99, 235, 0.95)';
+      alertEl.style.display = 'block';
+    }
+  }
+
+  function handleChaseEscaped(msg) {
+    const alertEl = document.getElementById('boundary-alert');
+    if (!alertEl) return;
+
+    if (msg.survivorId === myPlayerId) {
+      alertEl.innerHTML = `💨 <b>BROKE AWAY!</b> You escaped the 5m chase zone! Keep moving!`;
+      alertEl.style.borderColor = '#10b981';
+      alertEl.style.color = '#ffffff';
+      alertEl.style.background = 'rgba(16, 185, 129, 0.95)';
+      alertEl.style.display = 'block';
+      setTimeout(() => (alertEl.style.display = 'none'), 2500);
+    } else {
+      setTimeout(() => (alertEl.style.display = 'none'), 1000);
+    }
+  }
+
+  let crossInfectionTimeout = null;
+  function showCrossDeviceInfectionBanner(msg) {
+    const banner = document.getElementById('cross-device-infection-banner');
+    const detailEl = document.getElementById('cross-infection-detail');
+    if (!banner || !detailEl) return;
+
+    const methodLabel = msg.method === 'OUT_OF_BOUNDS_60S'
+      ? 'Toxic Wasteland Boundary Breach'
+      : (msg.method === '5M_CHASE_10S' ? '5m Chase Proximity' : 'Physical QR Tag');
+
+    detailEl.innerHTML = `<b>${escapeHtml(msg.victimName)}</b> was infected by <b>${escapeHtml(msg.killerName)}</b> via ${methodLabel}! Now a <b>ZOMBIE</b>!`;
+    banner.style.display = 'flex';
+
+    if (crossInfectionTimeout) clearTimeout(crossInfectionTimeout);
+    crossInfectionTimeout = setTimeout(() => {
+      banner.style.display = 'none';
+    }, 4500);
+  }
+
+  let tacticalToastTimeout = null;
+  function showTacticalToast(text, icon = '📍') {
+    const toast = document.getElementById('tactical-toast');
+    const msgEl = document.getElementById('tactical-toast-msg');
+    const iconEl = document.getElementById('tactical-toast-icon');
+    if (!toast) return;
+
+    if (msgEl) msgEl.textContent = text;
+    if (iconEl) iconEl.textContent = icon;
+    toast.style.display = 'flex';
+
+    if (tacticalToastTimeout) clearTimeout(tacticalToastTimeout);
+    tacticalToastTimeout = setTimeout(() => {
+      toast.style.display = 'none';
+    }, 3000);
+  }
+
+  function refreshPlayerGpsAndMap() {
+    window.soundEngine?.playClick();
+    const btn = document.getElementById('btn-refresh-map');
+    const fab = document.getElementById('btn-map-recenter-gps');
+    btn?.classList.add('spinning');
+    fab?.classList.add('spinning');
+    setTimeout(() => {
+      btn?.classList.remove('spinning');
+      fab?.classList.remove('spinning');
+    }, 1200);
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude, heading } = pos.coords;
+          myPosition = { lat: latitude, lng: longitude };
+          updateAndSendLocation(latitude, longitude, heading);
+          if (gameMap) {
+            gameMap.setView([latitude, longitude], 17);
+            gameMap.invalidateSize();
+          }
+          if (myMarker) {
+            myMarker.setLatLng([latitude, longitude]);
+          }
+          showTacticalToast('GPS Refreshed & Radar Synchronized!', '📍');
+          window.soundEngine?.playPing();
+        },
+        (err) => {
+          console.warn('GPS refresh notice:', err);
+          showTacticalToast('GPS Signal Weak: Ensure Location is ON', '⚠️');
+        },
+        { enableHighAccuracy: true, timeout: 6000, maximumAge: 0 }
+      );
+    } else {
+      showTacticalToast('Geolocation not supported on this device', '⚠️');
+    }
+  }
+
+  function handlePlayerInfected(msg) {
+    window.soundEngine?.playTagAlarm();
+    if (navigator.vibrate) navigator.vibrate([500, 200, 500]);
+
+    if (Array.isArray(msg.players) && msg.players.length > 0) {
+      currentRoomData.players = msg.players;
+    }
+
+    // Trigger cross-device notification banner on every device
+    showCrossDeviceInfectionBanner(msg);
+
+    if (msg.victimId === myPlayerId) {
+      setClientOutOfBounds(false);
+      myAssignedRole = 'zombie';
+      currentRole = 'zombie';
+
+      const alertDesc = document.getElementById('infection-alert-desc');
+      if (alertDesc) {
+        if (msg.method === 'OUT_OF_BOUNDS_60S') {
+          alertDesc.innerHTML = `Eliminated by <b>Toxic Wasteland (Out of Bounds)</b> for staying outside the zone 60s!<br><b>YOU ARE NOW INFECTED. JOIN THE HUNT!</b>`;
+        } else {
+          alertDesc.innerHTML = `Tagged by <b>${escapeHtml(msg.killerName)}</b> via ${msg.method}!<br><b>YOU ARE NOW INFECTED. JOIN THE HUNT!</b>`;
+        }
+      }
+
+      const alertModal = document.getElementById('modal-infection-alert');
+      if (alertModal) alertModal.style.display = 'flex';
+
+      updateGameHUD();
+    } else {
+      const boundaryAlert = document.getElementById('boundary-alert');
+      if (boundaryAlert) {
+        boundaryAlert.textContent = `☣️ INFECTION! ${msg.victimName} was infected by ${msg.killerName}!`;
+        boundaryAlert.style.borderColor = '#ec3013';
+        boundaryAlert.style.display = 'block';
+        setTimeout(() => (boundaryAlert.style.display = 'none'), 4000);
+      }
+    }
+
+    updateRunnersAliveCount();
+  }
+
+  function handlePowerupBought(msg) {
+    window.soundEngine?.playClick();
+    myPowerups = msg.powerups || [];
+    if (msg.bountiesEarned !== undefined) myBounties = msg.bountiesEarned;
+
+    const def = CLIENT_POWERUP_CATALOG[msg.powerupId];
+    alert(`Acquired ${def?.name || msg.powerupId}! Ready in inventory slot.`);
+    document.getElementById('modal-powerup-shop').style.display = 'none';
+  }
+
+  function handlePowerupActivated(msg) {
+    window.soundEngine?.playPing();
+    const boundaryAlert = document.getElementById('boundary-alert');
+    if (boundaryAlert) {
+      boundaryAlert.textContent = `⚡ POWERUP: ${msg.playerName} activated ${msg.powerupName}!`;
+      boundaryAlert.style.borderColor = '#ffab00';
+      boundaryAlert.style.display = 'block';
+      setTimeout(() => (boundaryAlert.style.display = 'none'), 3000);
+    }
+  }
+
+  function handleExtractionStarted(msg) {
+    window.soundEngine?.playFanfare();
+    if (navigator.vibrate) navigator.vibrate([300, 150, 300, 150, 300]);
+
+    const boundaryAlert = document.getElementById('boundary-alert');
+    if (boundaryAlert) {
+      boundaryAlert.textContent = '🚀 FINAL PHASE: EXTRACTION ZONE IS OPEN! SURVIVORS ESCAPE NOW!';
+      boundaryAlert.style.borderColor = '#ffab00';
+      boundaryAlert.style.display = 'block';
+      setTimeout(() => (boundaryAlert.style.display = 'none'), 6000);
+    }
+  }
+
+  function handleSurvivorEscaped(msg) {
+    window.soundEngine?.playFanfare();
+    const boundaryAlert = document.getElementById('boundary-alert');
+    if (boundaryAlert) {
+      boundaryAlert.textContent = `🏆 ESCAPED! Survivor ${msg.survivorName} successfully extracted!`;
+      boundaryAlert.style.borderColor = '#10b981';
+      boundaryAlert.style.display = 'block';
+      setTimeout(() => (boundaryAlert.style.display = 'none'), 5000);
+    }
   }
 
   // Player Tagged Event
@@ -1463,29 +2340,107 @@
 
   // Game Over Event
   function handleGameOver(msg) {
+    setClientOutOfBounds(false);
     window.soundEngine?.playFanfare();
     showScreen('gameOver');
+
+    // Clean up peer markers from map
+    peerMarkers.forEach((entry) => {
+      if (gameMap && gameMap.hasLayer(entry.marker)) gameMap.removeLayer(entry.marker);
+    });
+    peerMarkers.clear();
 
     const winnerTitle = document.getElementById('game-over-winner-title');
     const reasonText = document.getElementById('game-over-reason');
 
-    if (msg.winner === 'HUNTERS') {
-      winnerTitle.textContent = 'HUNTERS WON';
-      winnerTitle.style.color = '#60a5fa';
-      reasonText.textContent = 'All runners were caught before time expired.';
-    } else {
-      winnerTitle.textContent = 'RUNNERS SURVIVED';
-      winnerTitle.style.color = 'var(--parchment)';
-      reasonText.textContent = 'Runners evaded the chase and survived the round!';
+    const isZombiesWin = msg.winner === 'ZOMBIES' || msg.winner === 'HUNTERS';
+    if (winnerTitle) {
+      winnerTitle.textContent = isZombiesWin ? 'ZOMBIES INFECTED ALL' : 'SURVIVORS ESCAPED & WON!';
+      winnerTitle.style.color = isZombiesWin ? '#ff3131' : '#38bdf8';
+    }
+    if (reasonText) {
+      reasonText.textContent = isZombiesWin
+        ? 'The horde prevailed! Every survivor was hunted down and infected.'
+        : 'Survivors successfully evaded the horde and survived the round!';
     }
 
-    const durationMin = Math.round((msg.stats?.durationSeconds || 0) / 60) || 1;
-    document.getElementById('stat-match-duration').textContent = `${durationMin} min`;
-    document.getElementById('stat-match-pings').textContent = `${msg.stats?.totalPings || 0} pings`;
+    const durationMin = Math.floor((msg.stats?.durationSeconds || 0) / 60);
+    const durationSec = (msg.stats?.durationSeconds || 0) % 60;
+    const durEl = document.getElementById('stat-match-duration');
+    if (durEl) durEl.textContent = `${durationMin}m ${durationSec}s`;
+
+    const escapedEl = document.getElementById('stat-match-escaped');
+    if (escapedEl) escapedEl.textContent = msg.stats?.escapedSurvivors?.length || 0;
+
+    const infectionList = msg.stats?.infectionLog || [];
+    const infectEl = document.getElementById('stat-match-infections');
+    if (infectEl) infectEl.textContent = infectionList.length;
+
+    // 1. Render Infection Timeline ("Who Infected Who")
+    const timelineList = document.getElementById('game-over-timeline-list');
+    if (timelineList) {
+      timelineList.innerHTML = '';
+      if (infectionList.length === 0) {
+        timelineList.innerHTML = '<div style="font-size: 12px; color: var(--parchment-muted); font-style: italic;">No infections occurred this match!</div>';
+      } else {
+        infectionList.forEach((ev) => {
+          const row = document.createElement('div');
+          row.className = 'timeline-event-row';
+          const time = new Date(ev.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          const methodDesc = ev.method === 'OUT_OF_BOUNDS_60S'
+            ? '60s Boundary Breach'
+            : (ev.method === '5M_CHASE_10S' ? '5m Chase Proximity' : 'Physical QR Tag');
+          row.innerHTML = `<b>${time}</b> • 🧟 <b style="color: #ff3131;">${escapeHtml(ev.killerName)}</b> infected 🏃 <b>${escapeHtml(ev.victimName)}</b> (${methodDesc})`;
+          timelineList.appendChild(row);
+        });
+      }
+    }
+
+    // 2. Render Operative Scoreboard
+    const scoreboardList = document.getElementById('game-over-scoreboard-list');
+    if (scoreboardList) {
+      scoreboardList.innerHTML = '';
+      const players = msg.stats?.players || [];
+      players.sort((a, b) => (b.tagsCount || 0) - (a.tagsCount || 0));
+      players.forEach((p) => {
+        const row = document.createElement('div');
+        const isZombie = p.assignedRole === 'zombie';
+        row.className = `scoreboard-row ${isZombie ? 'zombie-role' : 'survivor-won'}`;
+        const statusBadge = p.escaped
+          ? '<span style="color: #38bdf8; font-weight: 700;">ESCAPED 🚀</span>'
+          : (p.isTagged ? '<span style="color: #ff3131; font-weight: 700;">INFECTED ☣️</span>' : '<span style="color: #22c55e; font-weight: 700;">SURVIVED 🛡️</span>');
+        row.innerHTML = `
+          <div>
+            <b>${isZombie ? '💀' : '🏃'} ${escapeHtml(p.name)}</b>
+            <div style="font-size: 10px; color: var(--parchment-muted);">${isZombie ? 'Zombie' : 'Survivor'}</div>
+          </div>
+          <div style="text-align: right;">
+            <div>${statusBadge}</div>
+            <div style="font-size: 10px; color: var(--parchment-muted);">${p.tagsCount || 0} Infections</div>
+          </div>
+        `;
+        scoreboardList.appendChild(row);
+      });
+    }
+
+    // 3. Save match recap to localStorage for persistence
+    try {
+      localStorage.setItem('run_for_your_life_last_recap', JSON.stringify({
+        timestamp: Date.now(),
+        winner: msg.winner,
+        stats: msg.stats
+      }));
+    } catch (_) {}
   }
 
   document.getElementById('btn-return-lobby').addEventListener('click', () => {
     window.soundEngine?.playClick();
+    peerMarkers.forEach((entry) => {
+      if (gameMap && gameMap.hasLayer(entry.marker)) gameMap.removeLayer(entry.marker);
+    });
+    peerMarkers.clear();
+    sessionStorage.removeItem('RFYL_ACTIVE_ROOM');
+    sessionStorage.removeItem('RFYL_ACTIVE_PLAYER_ID');
     localStorage.removeItem('RFYL_ACTIVE_ROOM');
     showScreen('landing');
   });
@@ -1503,7 +2458,8 @@
     useSimulationGps = !useSimulationGps;
     const gpsLabel = document.getElementById('gps-btn-label');
     if (gpsLabel) gpsLabel.textContent = useSimulationGps ? 'Sim' : 'GPS';
-    document.getElementById('joystick').style.display = useSimulationGps ? 'flex' : 'none';
+    const joyEl = document.getElementById('joystick');
+    if (joyEl) joyEl.style.display = useSimulationGps ? 'flex' : 'none';
     if (!useSimulationGps) {
       startRealGpsTracking();
     }
@@ -1519,17 +2475,48 @@
   }
 
   function startRealGpsTracking() {
-    if (watchPositionId !== null) return;
     if (navigator.geolocation) {
-      watchPositionId = navigator.geolocation.watchPosition(
+      // Immediate one-shot fix for instantaneous responsive tracking
+      navigator.geolocation.getCurrentPosition(
         (pos) => {
+          hasLocationPermission = true;
           if (!useSimulationGps) {
             updateAndSendLocation(pos.coords.latitude, pos.coords.longitude);
           }
         },
-        (err) => console.warn('Geolocation watch error:', err),
-        { enableHighAccuracy: true, maximumAge: 1000 }
+        (err) => console.warn('Initial geolocation position fix warning:', err),
+        { enableHighAccuracy: true, timeout: 6000, maximumAge: 0 }
       );
+
+      // Continuous high-accuracy watcher
+      if (watchPositionId === null) {
+        watchPositionId = navigator.geolocation.watchPosition(
+          (pos) => {
+            hasLocationPermission = true;
+            if (!useSimulationGps) {
+              updateAndSendLocation(pos.coords.latitude, pos.coords.longitude);
+            }
+          },
+          (err) => console.warn('Geolocation watch error:', err),
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 1000 }
+        );
+      }
+
+      // 1-Second Continuous Heartbeat Poller (prevents mobile OS GPS throttling when stationary/slow)
+      if (gpsPollInterval === null) {
+        gpsPollInterval = setInterval(() => {
+          if (!useSimulationGps && navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+              (pos) => {
+                hasLocationPermission = true;
+                updateAndSendLocation(pos.coords.latitude, pos.coords.longitude);
+              },
+              () => {},
+              { enableHighAccuracy: true, timeout: 4000, maximumAge: 500 }
+            );
+          }
+        }, 1000);
+      }
     }
   }
 
@@ -1538,14 +2525,14 @@
     myPath.push({ lat, lng, time: Date.now() });
 
     if (myMarker) myMarker.setLatLng([lat, lng]);
-    if (gameMap) gameMap.panTo([lat, lng]);
+    if (gameMap && !userIsDraggingMap) gameMap.panTo([lat, lng]);
 
-    // Boundary check
-    if (currentRoomData?.config?.arena) {
-      const dist = haversine(lat, lng, currentRoomData.config.arena.lat, currentRoomData.config.arena.lng);
-      const out = dist > currentRoomData.config.arena.radius;
-      const alertEl = document.getElementById('boundary-alert');
-      alertEl.style.display = out ? 'block' : 'none';
+    // Boundary check & countdown
+    const arena = currentRoomData?.config?.arena || currentRoomConfig?.arena;
+    if (arena) {
+      const dist = haversine(lat, lng, arena.lat, arena.lng);
+      const out = dist > arena.radius;
+      setClientOutOfBounds(out);
     }
 
     // 1. Send via WebSocket if available
@@ -1569,6 +2556,7 @@
   function setupJoystick() {
     const joyEl = document.getElementById('joystick');
     const thumbEl = document.getElementById('joystick-thumb');
+    if (!joyEl || !thumbEl) return;
 
     const handleStart = (clientX, clientY) => {
       const rect = joyEl.getBoundingClientRect();
@@ -1646,67 +2634,125 @@
     updateAndSendLocation(newLat, newLng);
   }
 
-  // --- TAG ACTION DIALOGS ---
-  document.getElementById('btn-tag-action').addEventListener('click', () => {
+  // --- ZOMBIES TACTICAL ACTIONS & MODAL BINDINGS ---
+
+  // 1. Zombie TAP TO INFECT Burst Button
+  document.getElementById('btn-zombie-infect-burst')?.addEventListener('click', () => {
     window.soundEngine?.playClick();
-    updateRunnersAliveCount();
-
-    const runners = (currentRoomData?.players || []).filter((p) => {
-      const role = (p.assignedRole || p.rolePreference || p.role || '').toLowerCase();
-      return role === 'runner' && p.id !== myPlayerId && !p.isTagged;
-    });
-
-    const container = document.getElementById('tag-runner-options');
-    container.innerHTML = '';
-
-    if (runners.length === 0) {
-      container.innerHTML = '<p style="color:var(--parchment-muted); font-size:13px; padding: 12px 0;">No active runners detected in range to tag.</p>';
-    } else {
-      runners.forEach((r) => {
-        const btn = document.createElement('button');
-        btn.className = 'btn btn-secondary';
-        btn.style.width = '100%';
-        btn.style.textAlign = 'left';
-        btn.style.display = 'flex';
-        btn.style.alignItems = 'center';
-        btn.style.gap = '8px';
-        btn.style.marginBottom = '8px';
-        btn.innerHTML = `<svg class="custom-emoticon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="var(--crimson)"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg> <span>Tag <b>${escapeHtml(r.name || 'Runner')}</b></span>`;
-        btn.addEventListener('click', () => {
-          document.getElementById('tag-modal').classList.remove('active');
-          if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: 'TAG_CLAIM', targetRunnerId: r.id }));
-          }
-          window.supabaseGameManager.broadcastEvent('player_tagged', {
-            runnerId: r.id,
-            targetRunnerId: r.id,
-            runnerName: r.name || 'Runner',
-            hunterName: document.getElementById('player-name-input').value.trim() || 'Hunter'
-          });
-        });
-        container.appendChild(btn);
-      });
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'TRIGGER_INFECTION_BURST' }));
     }
-
-    document.getElementById('tag-modal').classList.add('active');
   });
 
-  document.getElementById('btn-cancel-tag').addEventListener('click', () => {
-    document.getElementById('tag-modal').classList.remove('active');
-  });
+  // 2. Powerup Slots 1 & 2 Tap to Activate
+  document.getElementById('btn-powerup-slot-0')?.addEventListener('click', () => activatePowerupSlot(0));
+  document.getElementById('btn-powerup-slot-1')?.addEventListener('click', () => activatePowerupSlot(1));
 
-  document.getElementById('btn-runner-tagged-action').addEventListener('click', () => {
-    if (confirm("Confirm that a hunter has tagged you in person? You'll become a spectator.")) {
-      window.soundEngine?.playClick();
+  function activatePowerupSlot(slotIdx) {
+    if (!myPowerups[slotIdx]) {
+      alert('This slot is empty! Visit a Supply Outpost (Health+) or Arena Hub to purchase powerups.');
+      return;
+    }
+    const powerupId = myPowerups[slotIdx];
+    const def = CLIENT_POWERUP_CATALOG[powerupId];
+    if (confirm(`Activate ${def ? def.name : powerupId} now?`)) {
       if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'CONFIRM_TAGGED_SELF' }));
+        ws.send(JSON.stringify({ type: 'ACTIVATE_POWERUP', powerupId }));
       }
-      window.supabaseGameManager.broadcastEvent('player_tagged', {
-        runnerId: myPlayerId,
-        runnerName: document.getElementById('player-name-input').value.trim() || 'Runner',
-        hunterName: 'Hunters'
-      });
     }
+  }
+
+  // 3. Powerup Shop Modal (Cleaned up - coins removed)
+  document.getElementById('btn-close-shop')?.addEventListener('click', () => {
+    const modal = document.getElementById('modal-powerup-shop');
+    if (modal) modal.style.display = 'none';
+  });
+
+  // 4. My Personal QR & Tag Code Modal
+  document.getElementById('btn-open-my-qr')?.addEventListener('click', () => {
+    window.soundEngine?.playClick();
+    const qrImg = document.getElementById('my-qr-img');
+    const textCodeEl = document.getElementById('my-qr-text-code');
+
+    if (qrImg) {
+      qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(myTagCode)}`;
+    }
+    if (textCodeEl) {
+      textCodeEl.textContent = myTagCode;
+    }
+    document.getElementById('modal-my-qr').style.display = 'flex';
+  });
+
+  document.getElementById('btn-close-my-qr')?.addEventListener('click', () => {
+    document.getElementById('modal-my-qr').style.display = 'none';
+  });
+
+  // 5. QR Code Camera Scanner Modal
+  let isScanningZombie = true;
+
+  document.getElementById('btn-runner-tagged-action')?.addEventListener('click', () => {
+    isScanningZombie = true; // Survivor scanning Zombie
+    openScannerModal('ADMIT DEFEAT: SCAN ZOMBIE QR', 'Scan the QR code of the Zombie who tagged you:');
+  });
+
+  document.getElementById('btn-zombie-scan-victim')?.addEventListener('click', () => {
+    isScanningZombie = false; // Zombie scanning Survivor
+    openScannerModal('CLAIM BOUNTY: SCAN VICTIM QR', 'Scan the QR code of your victim to steal their bounty:');
+  });
+
+  document.getElementById('btn-close-scanner')?.addEventListener('click', closeScannerModal);
+
+  function openScannerModal(title, desc) {
+    window.soundEngine?.playClick();
+    document.getElementById('scanner-modal-title').textContent = title;
+    document.getElementById('scanner-modal-desc').textContent = desc;
+    document.getElementById('modal-qr-scanner').style.display = 'flex';
+
+    // Request camera stream
+    const video = document.getElementById('scanner-video-preview');
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia && video) {
+      navigator.mediaDevices
+        .getUserMedia({ video: { facingMode: 'environment' } })
+        .then((stream) => {
+          scannerStream = stream;
+          video.srcObject = stream;
+        })
+        .catch((err) => console.warn('Camera preview unavailable, manual input active:', err));
+    }
+  }
+
+  function closeScannerModal() {
+    if (scannerStream) {
+      scannerStream.getTracks().forEach((t) => t.stop());
+      scannerStream = null;
+    }
+    document.getElementById('modal-qr-scanner').style.display = 'none';
+  }
+
+  document.getElementById('btn-submit-scanned-code')?.addEventListener('click', () => {
+    const input = document.getElementById('manual-qr-code-input');
+    const code = (input ? input.value : '').trim().toUpperCase();
+    if (!code) {
+      alert('Please enter or scan a valid tag code.');
+      return;
+    }
+
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      if (isScanningZombie) {
+        ws.send(JSON.stringify({ type: 'CONFIRM_QR_TAG', scannedZombieCode: code }));
+      } else {
+        ws.send(JSON.stringify({ type: 'CONFIRM_QR_TAG', scannedVictimCode: code }));
+      }
+    }
+    closeScannerModal();
+    if (input) input.value = '';
+  });
+
+
+
+  // 7. Acknowledge Infection Dialog
+  document.getElementById('btn-ack-infection')?.addEventListener('click', () => {
+    document.getElementById('modal-infection-alert').style.display = 'none';
   });
 
   // --- LIVE TACTICAL CHAT & INLINE PHOTO UPLOAD ---
@@ -1837,9 +2883,35 @@
     const isMe = msg.senderId === myPlayerId;
     const msgEl = document.createElement('div');
     msgEl.id = msg.id;
+
+    if (msg.role === 'system') {
+      msgEl.className = 'chat-msg system-alert';
+      const isSafe = msg.senderName && msg.senderName.includes('SAFE');
+      const headerColor = isSafe ? '#10b981' : '#ff3131';
+      const headerTitle = msg.senderName || '☣️ TACTICAL ALERT';
+      msgEl.innerHTML = `
+        <div style="font-size: 10px; font-weight: 800; color: ${headerColor}; text-transform: uppercase; margin-bottom: 2px;">
+          ${escapeHtml(headerTitle)}
+        </div>
+        <div class="chat-bubble" style="${isSafe ? 'border-color: #10b981; background: rgba(16, 185, 129, 0.15); color: #d1fae5 !important;' : ''}">${escapeHtml(msg.text)}</div>
+      `;
+      chatStream.appendChild(msgEl);
+      chatStream.scrollTop = chatStream.scrollHeight;
+      if (!isChatOpen) {
+        unreadChatCount++;
+        if (chatUnreadBadge) {
+          chatUnreadBadge.textContent = unreadChatCount;
+          chatUnreadBadge.style.display = 'flex';
+        }
+      }
+      return;
+    }
+
     msgEl.className = `chat-msg ${isMe ? 'outgoing' : 'incoming'}`;
 
-    const roleClass = msg.role === 'hunter' ? 'chat-badge-hunter' : (msg.role === 'runner' ? 'chat-badge-runner' : '');
+    const isZombie = msg.role === 'zombie' || msg.role === 'hunter';
+    const roleClass = isZombie ? 'chat-badge-zombie' : 'chat-badge-survivor';
+    const roleIcon = isZombie ? '💀' : '🏃';
     const timeFormatted = new Date(msg.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     let photoHtml = '';
@@ -1849,7 +2921,7 @@
 
     msgEl.innerHTML = `
       <div class="chat-msg-header">
-        <span class="chat-sender-badge ${roleClass}">${escapeHtml(msg.senderName)}</span>
+        <span class="chat-sender-badge ${roleClass}">${roleIcon} ${escapeHtml(msg.senderName)}</span>
         <span class="chat-time">${timeFormatted}</span>
       </div>
       ${msg.text ? `<div class="chat-msg-text">${escapeHtml(msg.text)}</div>` : ''}
@@ -1890,22 +2962,15 @@
   });
 
   // =========================================================
-  // INTERACTIVE ANIMATED TUTORIAL & OFFICIAL RULEBOOK
+  // OFFICIAL FIELD MANUAL & GAME RULES MODAL
   // =========================================================
-  let currentTutorialStep = 0;
-  const totalTutorialSteps = 5;
-
-  function openTutorialModal(initialTab = 'tutorial') {
+  function openTutorialModal() {
     window.soundEngine?.playClick();
     const modal = document.getElementById('tutorial-modal');
     if (!modal) return;
     modal.classList.add('active');
-
-    if (initialTab === 'rules') {
-      switchTutorialTab('rules');
-    } else {
-      switchTutorialTab('tutorial');
-    }
+    const bodyRules = document.getElementById('tutorial-content-rules');
+    if (bodyRules) bodyRules.classList.add('active');
   }
 
   function closeTutorialModal() {
@@ -1913,139 +2978,254 @@
     if (modal) modal.classList.remove('active');
   }
 
-  function switchTutorialTab(tabName) {
-    window.soundEngine?.playClick();
-    const btnTut = document.getElementById('tab-btn-tutorial');
-    const btnRules = document.getElementById('tab-btn-rules');
-    const bodyTut = document.getElementById('tutorial-content-walkthrough');
-    const bodyRules = document.getElementById('tutorial-content-rules');
-
-    if (tabName === 'tutorial') {
-      btnTut?.classList.add('active');
-      btnRules?.classList.remove('active');
-      bodyTut?.classList.add('active');
-      bodyRules?.classList.remove('active');
-    } else {
-      btnTut?.classList.remove('active');
-      btnRules?.classList.add('active');
-      bodyTut?.classList.remove('active');
-      bodyRules?.classList.add('active');
-    }
-  }
-
-  function goToTutorialStep(stepIndex) {
-    if (stepIndex < 0 || stepIndex >= totalTutorialSteps) return;
-    window.soundEngine?.playClick();
-    currentTutorialStep = stepIndex;
-
-    // Update active stage slide
-    document.querySelectorAll('.tutorial-stage').forEach((st, idx) => {
-      st.classList.toggle('active', idx === currentTutorialStep);
-    });
-
-    // Update step chips
-    document.querySelectorAll('.step-chip').forEach((chip) => {
-      const chipStep = parseInt(chip.dataset.step, 10);
-      chip.classList.toggle('active', chipStep === currentTutorialStep);
-    });
-
-    // Update dots
-    document.querySelectorAll('.t-dot').forEach((dot) => {
-      const dotStep = parseInt(dot.dataset.step, 10);
-      dot.classList.toggle('active', dotStep === currentTutorialStep);
-    });
-
-    // Update Next/Finish button text
-    const nextBtn = document.getElementById('btn-tutorial-next');
-    if (nextBtn) {
-      nextBtn.textContent = (currentTutorialStep === totalTutorialSteps - 1) ? 'Finish ✓' : 'Next →';
-    }
-  }
-
-  // Tutorial open/close listeners
-  document.getElementById('btn-open-tutorial')?.addEventListener('click', () => openTutorialModal('tutorial'));
-  document.getElementById('btn-open-tutorial-card')?.addEventListener('click', () => openTutorialModal('tutorial'));
-  document.getElementById('btn-hud-help')?.addEventListener('click', () => openTutorialModal('tutorial'));
+  // Field Manual open/close listeners
+  document.getElementById('btn-open-tutorial')?.addEventListener('click', openTutorialModal);
+  document.getElementById('btn-open-tutorial-card')?.addEventListener('click', openTutorialModal);
+  document.getElementById('btn-hud-help')?.addEventListener('click', openTutorialModal);
   document.getElementById('btn-close-tutorial')?.addEventListener('click', closeTutorialModal);
 
   document.getElementById('tutorial-modal')?.addEventListener('click', (e) => {
     if (e.target.id === 'tutorial-modal') closeTutorialModal();
   });
 
-  // Tab buttons
-  document.getElementById('tab-btn-tutorial')?.addEventListener('click', () => switchTutorialTab('tutorial'));
-  document.getElementById('tab-btn-rules')?.addEventListener('click', () => switchTutorialTab('rules'));
+  // GPS & Map Refresh Controls
+  document.getElementById('btn-refresh-map')?.addEventListener('click', refreshPlayerGpsAndMap);
+  document.getElementById('btn-map-recenter-gps')?.addEventListener('click', refreshPlayerGpsAndMap);
 
-  // Step chips
-  document.querySelectorAll('.step-chip').forEach((chip) => {
-    chip.addEventListener('click', () => {
-      const step = parseInt(chip.dataset.step, 10);
-      goToTutorialStep(step);
-    });
-  });
+  // --- TACTICAL HARDWARE & SENSOR SERVICES (PLAYCULTURE MATCH) ---
+  const RANDOM_CODENAMES = [
+    'Phantom', 'Vesper', 'Nomad', 'Viper', 'Cipher', 'Specter',
+    'Shadow', 'Rogue', 'Valkyrie', 'Ronin', 'Pulse', 'Apex',
+    'Ghost', 'Reaper', 'Falcon', 'Striker', 'Echo', 'Wraith'
+  ];
 
-  // Dots
-  document.querySelectorAll('.t-dot').forEach((dot) => {
-    dot.addEventListener('click', () => {
-      const step = parseInt(dot.dataset.step, 10);
-      goToTutorialStep(step);
-    });
-  });
-
-  // Prev / Next buttons
-  document.getElementById('btn-tutorial-prev')?.addEventListener('click', () => {
-    if (currentTutorialStep > 0) {
-      goToTutorialStep(currentTutorialStep - 1);
-    }
-  });
-
-  document.getElementById('btn-tutorial-next')?.addEventListener('click', () => {
-    if (currentTutorialStep < totalTutorialSteps - 1) {
-      goToTutorialStep(currentTutorialStep + 1);
-    } else {
-      closeTutorialModal();
-    }
-  });
-
-  // Interactive Stage Simulators
-  document.getElementById('btn-sim-breach')?.addEventListener('click', () => {
-    window.soundEngine?.playHeartbeat?.(true);
-    const alertEl = document.getElementById('boundary-alert');
-    if (alertEl) {
-      alertEl.style.borderColor = 'var(--crimson)';
-      alertEl.style.display = 'block';
-      setTimeout(() => (alertEl.style.display = 'none'), 1500);
-    }
-  });
-
-  let simIsDuel = true;
-  document.getElementById('btn-sim-duel-toggle')?.addEventListener('click', () => {
+  document.getElementById('btn-random-name')?.addEventListener('click', () => {
     window.soundEngine?.playClick();
-    simIsDuel = !simIsDuel;
-    const badge = document.querySelector('.anim-vs-badge');
-    const runnerCardP = document.querySelector('.anim-role-card.runner p');
-    if (badge && runnerCardP) {
-      badge.textContent = simIsDuel ? 'VS' : '2v4';
-      runnerCardP.textContent = simIsDuel ? '1v1 Duel Mode' : 'Multiplayer Squad';
+    const pick = RANDOM_CODENAMES[Math.floor(Math.random() * RANDOM_CODENAMES.length)];
+    const input = document.getElementById('player-name-input');
+    if (input) {
+      input.value = pick;
+      localStorage.setItem('RFYL_PLAYER_NAME', pick);
+      sessionStorage.setItem('RFYL_PLAYER_NAME', pick);
     }
   });
 
-  document.getElementById('btn-sim-heartbeat')?.addEventListener('click', () => {
-    window.soundEngine?.playHeartbeat?.(true);
+  // Services Modal Open / Close
+  const modalServices = document.getElementById('modal-services-status');
+  function openServicesModal() {
+    window.soundEngine?.playClick();
+    if (modalServices) {
+      modalServices.classList.add('active');
+      modalServices.style.display = 'flex';
+      refreshHardwareStatus();
+    }
+  }
+
+  function closeServicesModal() {
+    window.soundEngine?.playClick();
+    if (modalServices) {
+      modalServices.classList.remove('active');
+      modalServices.style.display = 'none';
+    }
+  }
+
+  document.getElementById('btn-open-services')?.addEventListener('click', openServicesModal);
+  document.getElementById('btn-close-services')?.addEventListener('click', closeServicesModal);
+  document.getElementById('btn-done-services')?.addEventListener('click', closeServicesModal);
+
+  // Top pills and dock click to open services
+  ['pill-net', 'pill-gps', 'pill-ble', 'pill-cam', 'sensor-status-dock'].forEach((id) => {
+    document.getElementById(id)?.addEventListener('click', openServicesModal);
   });
 
-  document.getElementById('btn-sim-sonar-ping')?.addEventListener('click', () => {
-    window.soundEngine?.playPing();
-    const blip = document.querySelector('.anim-ping-blip');
-    if (blip) {
-      blip.style.transform = 'scale(1.4)';
-      setTimeout(() => (blip.style.transform = 'scale(1)'), 400);
+  // Native Permission Triggers
+  document.getElementById('btn-grant-gps')?.addEventListener('click', () => {
+    window.soundEngine?.playClick();
+    if (window.AndroidNative && window.AndroidNative.requestLocationPermission) {
+      window.AndroidNative.requestLocationPermission();
+    } else if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        () => refreshHardwareStatus(),
+        () => refreshHardwareStatus()
+      );
     }
   });
 
-  document.getElementById('btn-sim-tag-alert')?.addEventListener('click', () => {
-    window.soundEngine?.playFanfare();
+  document.getElementById('btn-settings-gps')?.addEventListener('click', () => {
+    window.soundEngine?.playClick();
+    if (window.AndroidNative && window.AndroidNative.openAppSettings) {
+      window.AndroidNative.openAppSettings();
+    }
   });
+
+  document.getElementById('btn-grant-ble')?.addEventListener('click', () => {
+    window.soundEngine?.playClick();
+    if (window.AndroidNative && window.AndroidNative.requestBluetoothPermission) {
+      window.AndroidNative.requestBluetoothPermission();
+    } else {
+      alert('Bluetooth Low Energy (BLE) beaconing is active in native Android app.');
+    }
+  });
+
+  document.getElementById('btn-settings-ble')?.addEventListener('click', () => {
+    window.soundEngine?.playClick();
+    if (window.AndroidNative && window.AndroidNative.openAppSettings) {
+      window.AndroidNative.openAppSettings();
+    }
+  });
+
+  document.getElementById('btn-grant-cam')?.addEventListener('click', () => {
+    window.soundEngine?.playClick();
+    if (window.AndroidNative && window.AndroidNative.requestCameraPermission) {
+      window.AndroidNative.requestCameraPermission();
+    } else if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      navigator.mediaDevices.getUserMedia({ video: true })
+        .then((stream) => {
+          stream.getTracks().forEach((t) => t.stop());
+          refreshHardwareStatus();
+        })
+        .catch(() => refreshHardwareStatus());
+    }
+  });
+
+  document.getElementById('btn-settings-cam')?.addEventListener('click', () => {
+    window.soundEngine?.playClick();
+    if (window.AndroidNative && window.AndroidNative.openAppSettings) {
+      window.AndroidNative.openAppSettings();
+    }
+  });
+
+  document.getElementById('btn-refresh-net')?.addEventListener('click', () => {
+    window.soundEngine?.playClick();
+    initWebSocket();
+    refreshHardwareStatus();
+  });
+
+  let lastPingMs = 12;
+  function refreshHardwareStatus() {
+    let locGranted = false;
+    let bleGranted = false;
+    let camGranted = false;
+
+    if (window.AndroidNative && window.AndroidNative.checkPermissions) {
+      try {
+        const raw = window.AndroidNative.checkPermissions();
+        const info = JSON.parse(raw);
+        locGranted = !!info.location;
+        bleGranted = !!info.bluetooth;
+        camGranted = !!info.camera;
+      } catch (e) {
+        console.error('Error querying AndroidNative:', e);
+      }
+    } else {
+      // In web browser fallback
+      locGranted = hasLocationPermission;
+      bleGranted = true; // Simulated in browser
+      camGranted = true;
+    }
+
+    // 1. Update Network UI
+    const isNetOpen = ws && ws.readyState === WebSocket.OPEN;
+    const badgeNet = document.getElementById('badge-net-status');
+    const pillNet = document.getElementById('pill-net');
+    const netDetails = document.getElementById('service-net-details');
+    const netPing = document.getElementById('net-ping-display');
+
+    if (isNetOpen) {
+      if (badgeNet) { badgeNet.textContent = 'CONNECTED'; badgeNet.className = 'service-badge-pill green'; }
+      if (pillNet) { pillNet.innerHTML = '<span class="pill-dot green"></span>NET'; }
+      if (netPing) { netPing.textContent = lastPingMs; }
+      if (netDetails) { netDetails.textContent = `WebSocket low-latency loop active (${ws.url || 'localhost'})`; }
+    } else {
+      if (badgeNet) { badgeNet.textContent = 'CONNECTING'; badgeNet.className = 'service-badge-pill amber'; }
+      if (pillNet) { pillNet.innerHTML = '<span class="pill-dot red"></span>NET'; }
+    }
+
+    // 2. Update GPS UI
+    const badgeGps = document.getElementById('badge-gps-status');
+    const pillGps = document.getElementById('pill-gps');
+    const iconboxGps = document.getElementById('iconbox-gps');
+    const gpsDetails = document.getElementById('service-gps-details');
+    const btnGrantGps = document.getElementById('btn-grant-gps');
+
+    if (locGranted || hasLocationPermission) {
+      if (badgeGps) { badgeGps.textContent = 'ACTIVE (LOCKED)'; badgeGps.className = 'service-badge-pill green'; }
+      if (pillGps) { pillGps.innerHTML = '<span class="pill-dot green"></span>GPS'; }
+      if (iconboxGps) { iconboxGps.className = 'service-icon-box status-active'; }
+      if (gpsDetails) {
+        gpsDetails.textContent = (myPosition && myPosition.lat)
+          ? `Coords: ${myPosition.lat.toFixed(5)}, ${myPosition.lng.toFixed(5)} (±8m)`
+          : 'High-Accuracy GPS satellite lock acquired';
+      }
+      if (btnGrantGps) { btnGrantGps.style.display = 'none'; }
+    } else {
+      if (badgeGps) { badgeGps.textContent = 'PERMISSION NEEDED'; badgeGps.className = 'service-badge-pill'; }
+      if (pillGps) { pillGps.innerHTML = '<span class="pill-dot red"></span>GPS'; }
+      if (iconboxGps) { iconboxGps.className = 'service-icon-box status-warning'; }
+      if (btnGrantGps) { btnGrantGps.style.display = 'inline-block'; }
+    }
+
+    // 3. Update BLE UI
+    const badgeBle = document.getElementById('badge-ble-status');
+    const pillBle = document.getElementById('pill-ble');
+    const iconboxBle = document.getElementById('iconbox-ble');
+    const bleDetails = document.getElementById('service-ble-details');
+    const btnGrantBle = document.getElementById('btn-grant-ble');
+
+    if (bleGranted) {
+      if (badgeBle) { badgeBle.textContent = 'ACTIVE'; badgeBle.className = 'service-badge-pill green'; }
+      if (pillBle) { pillBle.innerHTML = '<span class="pill-dot green"></span>BLE'; }
+      if (iconboxBle) { iconboxBle.className = 'service-icon-box status-active'; }
+      if (bleDetails) { bleDetails.textContent = 'Bluetooth 10m Zombie Proximity Bursts ready'; }
+      if (btnGrantBle) { btnGrantBle.style.display = 'none'; }
+    } else {
+      if (badgeBle) { badgeBle.textContent = 'PERMISSION NEEDED'; badgeBle.className = 'service-badge-pill'; }
+      if (pillBle) { pillBle.innerHTML = '<span class="pill-dot red"></span>BLE'; }
+      if (iconboxBle) { iconboxBle.className = 'service-icon-box status-warning'; }
+      if (btnGrantBle) { btnGrantBle.style.display = 'inline-block'; }
+    }
+
+    // 4. Update Camera UI
+    const badgeCam = document.getElementById('badge-cam-status');
+    const pillCam = document.getElementById('pill-cam');
+    const iconboxCam = document.getElementById('iconbox-cam');
+    const camDetails = document.getElementById('service-cam-details');
+    const btnGrantCam = document.getElementById('btn-grant-cam');
+
+    if (camGranted) {
+      if (badgeCam) { badgeCam.textContent = 'READY'; badgeCam.className = 'service-badge-pill green'; }
+      if (pillCam) { pillCam.innerHTML = '<span class="pill-dot green"></span>CAM'; }
+      if (iconboxCam) { iconboxCam.className = 'service-icon-box status-active'; }
+      if (camDetails) { camDetails.textContent = 'Optic scanner ready for personal QR verification'; }
+      if (btnGrantCam) { btnGrantCam.style.display = 'none'; }
+    } else {
+      if (badgeCam) { badgeCam.textContent = 'NOT GRANTED'; badgeCam.className = 'service-badge-pill'; }
+      if (pillCam) { pillCam.innerHTML = '<span class="pill-dot amber"></span>CAM'; }
+      if (iconboxCam) { iconboxCam.className = 'service-icon-box'; }
+      if (btnGrantCam) { btnGrantCam.style.display = 'inline-block'; }
+    }
+
+    // Summary badge on Landing card
+    const summaryBadge = document.getElementById('landing-services-status');
+    if (summaryBadge) {
+      if (locGranted && bleGranted && isNetOpen) {
+        summaryBadge.textContent = 'ALL SENSORS READY ✓';
+        summaryBadge.className = 'services-status-pill';
+      } else {
+        summaryBadge.textContent = 'ACTION REQUIRED ⚠️';
+        summaryBadge.className = 'services-status-pill warning';
+      }
+    }
+  }
+
+  // Periodic poll of hardware status & on window focus
+  setInterval(refreshHardwareStatus, 3000);
+  window.addEventListener('focus', refreshHardwareStatus);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) refreshHardwareStatus();
+  });
+  // Initial check on load
+  setTimeout(refreshHardwareStatus, 600);
 
   // Utilities
   function haversine(lat1, lon1, lat2, lon2) {
@@ -2066,4 +3246,26 @@
     div.textContent = str;
     return div.innerHTML;
   }
+  // --- SCREEN WAKE LOCK UTILITY (Prevents phone sleep during outdoor play) ---
+  async function requestScreenWakeLock() {
+    try {
+      if ('wakeLock' in navigator && !screenWakeLock) {
+        screenWakeLock = await navigator.wakeLock.request('screen');
+        screenWakeLock.addEventListener('release', () => {
+          screenWakeLock = null;
+        });
+      }
+    } catch (err) {
+      console.warn('Wake Lock request warning:', err);
+    }
+  }
+
+  document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState === 'visible' && !screenWakeLock) {
+      const activeState = currentRoomData?.state;
+      if (activeState === 'THE_HUNT' || activeState === 'HEAD_START' || activeState === 'EXTRACTION') {
+        await requestScreenWakeLock();
+      }
+    }
+  });
 })();
