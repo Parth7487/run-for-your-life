@@ -46,6 +46,18 @@
     <span id="disconnect-buffer-text">⚠️ OPERATIVE DISCONNECTED • 90s BUFFER ACTIVE</span>
   </div>
 
+  <!-- Fullscreen 20-Meter Zombie Threat Blood-Red Vignette Overlay -->
+  <div id="zombie-proximity-vignette" class="zombie-proximity-vignette" style="display: none;"></div>
+
+  <!-- Live Walkie-Talkie Audio Transmission / Reception HUD Banner -->
+  <div id="walkie-talkie-banner" class="walkie-talkie-banner" style="display: none;">
+    <span class="radio-beacon-pulse"></span>
+    <span id="walkie-talkie-banner-text" class="radio-banner-text">📻 TRANSMITTING LIVE TO SURVIVORS...</span>
+    <div class="radio-sound-bars">
+      <span></span><span></span><span></span><span></span><span></span>
+    </div>
+  </div>
+
   <!-- 15-Meter Zombie Proximity Sonar Beep Warning Banner -->
   <div id="proximity-warning-banner" class="proximity-warning-banner" style="display: none;">
     <span class="proximity-sonar-icon">🚨</span>
@@ -120,12 +132,6 @@
               <path d="M6 2v20" stroke="currentColor" stroke-width="1.8"/>
               <path d="M10 7h7M10 11h7M10 15h4" stroke="var(--runner-gold)" stroke-width="1.8" stroke-linecap="round"/>
               <path d="M15 2v6l2-1.2 2 1.2V2" fill="var(--brand-red)" stroke="none"/>
-            </svg>
-          </button>
-          <button id="btn-open-settings" class="icon-button custom-emoticon-btn" title="System Settings & Diagnostics">
-            <svg class="custom-emoticon" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="3.2" fill="rgba(236,48,19,0.35)" stroke="var(--brand-red)" stroke-width="1.8"/>
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </button>
           <button id="sound-btn" class="icon-button custom-emoticon-btn" title="Toggle Tactical Audio">
@@ -585,9 +591,18 @@
         </button>
       </div>
 
-      <!-- SURVIVOR ACTION: ADMIT DEFEAT / SCAN ZOMBIE -->
-      <div id="survivor-action-controls" style="display: flex; width: 100%; gap: 10px;">
-        <button id="btn-runner-tagged-action" class="btn btn-secondary" style="flex: 1; border-color: var(--crimson); color: var(--parchment);">
+      <!-- SURVIVOR ACTION: WALKIE-TALKIE PUSH-TO-TALK & TAG REPORT -->
+      <div id="survivor-action-controls" style="display: flex; width: 100%; flex-direction: column; gap: 8px;">
+        <button id="btn-walkie-talkie" class="btn btn-walkie-talkie" title="Hold to Talk to Other Survivors">
+          <div class="ptt-content">
+            <span class="ptt-icon">📻</span>
+            <span id="walkie-talkie-label" class="ptt-label">HOLD TO TALK (SURVIVORS RADIO)</span>
+          </div>
+          <div class="ptt-wave-anim" id="ptt-wave-anim" style="display: none;">
+            <span></span><span></span><span></span><span></span><span></span>
+          </div>
+        </button>
+        <button id="btn-runner-tagged-action" class="btn btn-secondary" style="width: 100%; border-color: var(--crimson); color: var(--parchment); font-size: 11px; padding: 6px 12px;">
           ⚠️ I'VE BEEN TAGGED (SCAN ZOMBIE)
         </button>
       </div>
@@ -976,44 +991,6 @@
       <p class="modal-desc">Select which runner you have tagged in person:</p>
       <div id="tag-runner-options" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;"></div>
       <button id="btn-cancel-tag" class="btn btn-secondary">Cancel</button>
-    </div>
-  </div>
-
-  <!-- MODAL: System & Cloud Uplink Status Dialog -->
-  <div id="settings-modal" class="modal-overlay">
-    <div class="modal-card">
-      <h3 class="modal-title">SYSTEM UPLINK</h3>
-      <p class="modal-desc">All cloud systems are pre-configured & fully automated:</p>
-      
-      <div style="text-align: left; margin-bottom: 16px; background: rgba(255,255,255,0.04); padding: 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08);">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
-          <span style="font-size: 13px; font-weight: 600; color: #fff;">Cloud Server</span>
-          <span style="font-size: 11px; padding: 2px 8px; border-radius: 6px; background: rgba(34,197,94,0.15); color: #4ade80; border: 1px solid rgba(34,197,94,0.3);">ONLINE (Render WSS)</span>
-        </div>
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
-          <span style="font-size: 13px; font-weight: 600; color: #fff;">Supabase Realtime</span>
-          <span style="font-size: 11px; padding: 2px 8px; border-radius: 6px; background: rgba(34,197,94,0.15); color: #4ade80; border: 1px solid rgba(34,197,94,0.3);">CONNECTED (Auto)</span>
-        </div>
-        <div style="display: flex; align-items: center; justify-content: space-between;">
-          <span style="font-size: 13px; font-weight: 600; color: #fff;">Network Mode</span>
-          <span style="font-size: 11px; padding: 2px 8px; border-radius: 6px; background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.3);">4G / 5G / Any Wi-Fi</span>
-        </div>
-      </div>
-
-      <!-- Developer Advanced Settings (Hidden by default) -->
-      <details style="margin-bottom: 16px; text-align: left; font-size: 12px; color: #94a3b8;">
-        <summary style="cursor: pointer; padding: 4px 0; color: var(--runner-gold);">Developer Credentials Override</summary>
-        <div style="margin-top: 10px;">
-          <label class="input-label" style="font-size: 11px;">Supabase Project URL</label>
-          <input type="text" id="supabase-url-input" class="text-input" placeholder="https://xyz.supabase.co" style="font-size: 12px; margin-bottom: 8px;">
-
-          <label class="input-label" style="font-size: 11px;">Supabase Anon Key</label>
-          <input type="password" id="supabase-key-input" class="text-input" placeholder="ey..." style="font-size: 12px; margin-bottom: 8px;">
-          <button id="btn-save-settings" class="btn btn-secondary" style="font-size: 11px; padding: 6px 12px;">Save Custom Keys</button>
-        </div>
-      </details>
-
-      <button id="btn-close-settings" class="btn btn-primary" style="width: 100%;">Close Status</button>
     </div>
   </div>
 

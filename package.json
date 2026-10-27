@@ -9,7 +9,13 @@
     "dev": "node server.js"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/core": "^8.5.3",
     "@supabase/supabase-js": "^2.118.0",
+    "localtunnel": "^2.0.2",
     "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.3"
   }
 }

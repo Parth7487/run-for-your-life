@@ -26,7 +26,6 @@
   let myAssignedRole = null; // 'hunter' | 'runner'
   let myPosition = { lat: 37.7749, lng: -122.4194 }; // Default San Francisco
   let myPath = [];
-  let useSimulationGps = false;
   let hasLocationPermission = false;
   let watchPositionId = null;
   let pendingActionAfterPermission = null;
@@ -88,10 +87,6 @@
     RADAR_EXTEND_PLUS: { id: 'RADAR_EXTEND_PLUS', name: 'Radar Extend+', cost: 35, role: 'both', durationSeconds: 60, desc: 'Expands radar range by 2.5x.' },
     FRESH_MEAT: { id: 'FRESH_MEAT', name: 'Fresh Meat', cost: 25, role: 'zombie', durationSeconds: 30, desc: 'Scent Trail: Pings bearing & distance to closest living survivor.' }
   };
-
-  // Joystick state
-  const joystickState = { active: false, startX: 0, startY: 0, moveX: 0, moveY: 0 };
-  let joystickInterval = null;
 
   // DOM Elements
   const screens = {
@@ -488,6 +483,10 @@
         handlePlayerDropped(msg);
         break;
 
+      case 'WALKIE_TALKIE_RECEIVE':
+        handleWalkieTalkieReceive(msg);
+        break;
+
       case 'CHAT_MESSAGE':
         receiveChatMessage(msg.message || msg);
         break;
@@ -722,12 +721,9 @@
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           hasLocationPermission = true;
-          useSimulationGps = false;
           myPosition = { lat: pos.coords.latitude, lng: pos.coords.longitude };
           const gpsLabel = document.getElementById('gps-btn-label');
           if (gpsLabel) gpsLabel.textContent = 'GPS';
-          const joyEl = document.getElementById('joystick');
-          if (joyEl) joyEl.style.display = 'none';
           refreshHardwareStatus();
 
           if (setupMap) setupMap.setView([myPosition.lat, myPosition.lng], 16);
@@ -739,11 +735,8 @@
         (err) => {
           console.warn('GPS permission denied or unavailable:', err);
           hasLocationPermission = true;
-          useSimulationGps = true;
           const gpsLabel = document.getElementById('gps-btn-label');
-          if (gpsLabel) gpsLabel.textContent = 'Sim';
-          const joyEl = document.getElementById('joystick');
-          if (joyEl) joyEl.style.display = 'none';
+          if (gpsLabel) gpsLabel.textContent = 'GPS';
           refreshHardwareStatus();
           if (pendingActionAfterPermission) {
             pendingActionAfterPermission();
@@ -754,7 +747,6 @@
       );
     } else {
       hasLocationPermission = true;
-      useSimulationGps = true;
       refreshHardwareStatus();
       if (pendingActionAfterPermission) pendingActionAfterPermission();
     }
@@ -764,11 +756,8 @@
     window.soundEngine?.playClick();
     document.getElementById('location-permission-modal')?.classList.remove('active');
     hasLocationPermission = true;
-    useSimulationGps = false;
     const gpsLabel = document.getElementById('gps-btn-label');
     if (gpsLabel) gpsLabel.textContent = 'GPS';
-    const joyEl = document.getElementById('joystick');
-    if (joyEl) joyEl.style.display = 'none';
     if (pendingActionAfterPermission) {
       pendingActionAfterPermission();
       pendingActionAfterPermission = null;
@@ -788,30 +777,9 @@
     soundBtn.setAttribute('title', window.soundEngine.muted ? 'Tactical Audio: Muted' : 'Tactical Audio: Active');
   }
 
-  document.getElementById('sound-btn').addEventListener('click', () => {
+  document.getElementById('sound-btn')?.addEventListener('click', () => {
     window.soundEngine.muted = !window.soundEngine.muted;
     updateSoundBtnVisual();
-  });
-
-  // Settings Modal (Supabase Configuration)
-  document.getElementById('btn-open-settings').addEventListener('click', () => {
-    window.soundEngine?.playClick();
-    document.getElementById('supabase-url-input').value = window.supabaseGameManager.supabaseUrl;
-    document.getElementById('supabase-key-input').value = window.supabaseGameManager.supabaseAnonKey;
-    document.getElementById('settings-modal').classList.add('active');
-  });
-
-  document.getElementById('btn-close-settings').addEventListener('click', () => {
-    document.getElementById('settings-modal').classList.remove('active');
-  });
-
-  document.getElementById('btn-save-settings').addEventListener('click', () => {
-    window.soundEngine?.playClick();
-    const url = document.getElementById('supabase-url-input').value.trim();
-    const key = document.getElementById('supabase-key-input').value.trim();
-    window.supabaseGameManager.updateCredentials(url, key);
-    alert('Supabase credentials updated! Realtime channel reconnected.');
-    document.getElementById('settings-modal').classList.remove('active');
   });
 
   // --- NAVIGATION & GATING WITH COMPULSORY NAME ---
@@ -1473,7 +1441,7 @@
       }, 7000);
     });
 
-    setupJoystick();
+    setupWalkieTalkie();
   }
 
   function updateMyMarkerVisual() {
@@ -2032,11 +2000,12 @@
       }
     }
 
-    // 6. 15-Meter Zombie Proximity Early Warning Sonar Beep
+    // 6. 20-Meter Zombie Proximity Threat: Scary Sound & Red Screen Vignette Pulse
     const isZombieRole = myAssignedRole === 'zombie' || myAssignedRole === 'hunter' || currentRole === 'zombie';
     const isSurvivor = !isZombieRole;
     const proxBanner = document.getElementById('proximity-warning-banner');
     const proxText = document.getElementById('proximity-warning-text');
+    const vignetteEl = document.getElementById('zombie-proximity-vignette');
 
     if (isSurvivor && msg.blips && Array.isArray(msg.blips)) {
       let nearestZombieDist = Infinity;
@@ -2051,23 +2020,43 @@
         }
       }
 
-      if (nearestZombieDist <= 15) {
-        if (proxBanner) proxBanner.style.display = 'flex';
-        if (proxText) proxText.textContent = `⚠️ ZOMBIE (${nearestZombieName}) AT ${Math.round(nearestZombieDist)}m! RUN!`;
+      if (nearestZombieDist <= 20) {
+        // Red screen horror threat pulse
+        if (vignetteEl) {
+          vignetteEl.style.display = 'block';
+          vignetteEl.classList.add('zombie-threat-active');
+        }
 
-        const now = Date.now();
-        const cadence = nearestZombieDist <= 5 ? 250 : (nearestZombieDist <= 10 ? 500 : 1000);
-        if (now - lastProximityBeepTime >= cadence) {
-          lastProximityBeepTime = now;
-          window.soundEngine?.playProximityBeep(nearestZombieDist);
-          if (navigator.vibrate) {
-            try { navigator.vibrate(nearestZombieDist <= 5 ? [150, 50, 150] : [80]); } catch (e) {}
+        // Trigger procedural horror scary sound effect
+        window.soundEngine?.playZombieNearScarySound(nearestZombieDist);
+
+        if (proxBanner) proxBanner.style.display = 'flex';
+        if (proxText) proxText.textContent = `⚠️ ZOMBIE NEARBY (${nearestZombieName}) AT ${Math.round(nearestZombieDist)}m! RUN!`;
+
+        // 15-meter sonar beep & haptic pulse when zombie closes in
+        if (nearestZombieDist <= 15) {
+          const now = Date.now();
+          const cadence = nearestZombieDist <= 5 ? 250 : (nearestZombieDist <= 10 ? 500 : 1000);
+          if (now - lastProximityBeepTime >= cadence) {
+            lastProximityBeepTime = now;
+            window.soundEngine?.playProximityBeep(nearestZombieDist);
+            if (navigator.vibrate) {
+              try { navigator.vibrate(nearestZombieDist <= 5 ? [150, 50, 150] : [80]); } catch (e) {}
+            }
           }
         }
       } else {
+        if (vignetteEl) {
+          vignetteEl.style.display = 'none';
+          vignetteEl.classList.remove('zombie-threat-active');
+        }
         if (proxBanner) proxBanner.style.display = 'none';
       }
     } else {
+      if (vignetteEl) {
+        vignetteEl.style.display = 'none';
+        vignetteEl.classList.remove('zombie-threat-active');
+      }
       if (proxBanner) proxBanner.style.display = 'none';
     }
 
@@ -2453,25 +2442,9 @@
     }
   });
 
-  // Toggle GPS vs Simulation Joystick (Debug / Optional)
-  document.getElementById('btn-toggle-gps')?.addEventListener('click', () => {
-    useSimulationGps = !useSimulationGps;
-    const gpsLabel = document.getElementById('gps-btn-label');
-    if (gpsLabel) gpsLabel.textContent = useSimulationGps ? 'Sim' : 'GPS';
-    const joyEl = document.getElementById('joystick');
-    if (joyEl) joyEl.style.display = useSimulationGps ? 'flex' : 'none';
-    if (!useSimulationGps) {
-      startRealGpsTracking();
-    }
-  });
-
-  // --- LOCATION TRACKING & SIMULATION JOYSTICK ---
+  // --- REAL-TIME LIVE GPS LOCATION TRACKING ---
   function startLocationTracking() {
-    if (useSimulationGps) {
-      document.getElementById('joystick').style.display = 'flex';
-    } else {
-      startRealGpsTracking();
-    }
+    startRealGpsTracking();
   }
 
   function startRealGpsTracking() {
@@ -2480,9 +2453,7 @@
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           hasLocationPermission = true;
-          if (!useSimulationGps) {
-            updateAndSendLocation(pos.coords.latitude, pos.coords.longitude);
-          }
+          updateAndSendLocation(pos.coords.latitude, pos.coords.longitude);
         },
         (err) => console.warn('Initial geolocation position fix warning:', err),
         { enableHighAccuracy: true, timeout: 6000, maximumAge: 0 }
@@ -2493,9 +2464,7 @@
         watchPositionId = navigator.geolocation.watchPosition(
           (pos) => {
             hasLocationPermission = true;
-            if (!useSimulationGps) {
-              updateAndSendLocation(pos.coords.latitude, pos.coords.longitude);
-            }
+            updateAndSendLocation(pos.coords.latitude, pos.coords.longitude);
           },
           (err) => console.warn('Geolocation watch error:', err),
           { enableHighAccuracy: true, timeout: 10000, maximumAge: 1000 }
@@ -2505,7 +2474,7 @@
       // 1-Second Continuous Heartbeat Poller (prevents mobile OS GPS throttling when stationary/slow)
       if (gpsPollInterval === null) {
         gpsPollInterval = setInterval(() => {
-          if (!useSimulationGps && navigator.geolocation) {
+          if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
               (pos) => {
                 hasLocationPermission = true;
@@ -2552,86 +2521,192 @@
     }
   }
 
-  // Virtual Joystick implementation
-  function setupJoystick() {
-    const joyEl = document.getElementById('joystick');
-    const thumbEl = document.getElementById('joystick-thumb');
-    if (!joyEl || !thumbEl) return;
+  // --- SURVIVORS PUSH-TO-TALK (PTT) WALKIE-TALKIE RADIO ---
+  let walkieMediaRecorder = null;
+  let walkieAudioChunks = [];
+  let isWalkieTransmitting = false;
 
-    const handleStart = (clientX, clientY) => {
-      const rect = joyEl.getBoundingClientRect();
-      joystickState.active = true;
-      joystickState.startX = rect.left + rect.width / 2;
-      joystickState.startY = rect.top + rect.height / 2;
-      handleMove(clientX, clientY);
+  function setupWalkieTalkie() {
+    const pttBtn = document.getElementById('btn-walkie-talkie');
+    if (!pttBtn) return;
 
-      if (!joystickInterval) {
-        joystickInterval = setInterval(applyJoystickStep, 60);
+    const startTransmission = async (e) => {
+      if (e) e.preventDefault();
+      if (isWalkieTransmitting) return;
+
+      // Ensure operative is an active survivor
+      const isZombie = myAssignedRole === 'zombie' || myAssignedRole === 'hunter' || currentRole === 'zombie';
+      if (isZombie) {
+        showTacticalToast('Radio jammed: Zombies cannot transmit.');
+        return;
+      }
+
+      try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          showTacticalToast('Microphone not supported on this browser.');
+          return;
+        }
+
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        isWalkieTransmitting = true;
+        walkieAudioChunks = [];
+
+        // UI state
+        pttBtn.classList.add('is-transmitting');
+        const label = document.getElementById('walkie-talkie-label');
+        if (label) label.textContent = 'TRANSMITTING... (RELEASE TO SEND)';
+        const waveAnim = document.getElementById('ptt-wave-anim');
+        if (waveAnim) waveAnim.style.display = 'flex';
+
+        const banner = document.getElementById('walkie-talkie-banner');
+        const bannerText = document.getElementById('walkie-talkie-banner-text');
+        if (banner) {
+          banner.classList.remove('is-incoming');
+          banner.style.display = 'flex';
+          if (bannerText) bannerText.textContent = '📻 TRANSMITTING LIVE TO SURVIVORS...';
+        }
+
+        // Tactical key-up squelch
+        window.soundEngine?.playRadioStart();
+
+        // Determine supported audio mimeType
+        let mimeType = 'audio/webm;codecs=opus';
+        if (typeof MediaRecorder.isTypeSupported === 'function') {
+          if (!MediaRecorder.isTypeSupported(mimeType)) {
+            mimeType = MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '';
+          }
+        } else {
+          mimeType = '';
+        }
+
+        walkieMediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+
+        walkieMediaRecorder.ondataavailable = (event) => {
+          if (event.data && event.data.size > 0) {
+            walkieAudioChunks.push(event.data);
+          }
+        };
+
+        walkieMediaRecorder.onstop = () => {
+          stream.getTracks().forEach((track) => track.stop());
+
+          if (walkieAudioChunks.length > 0) {
+            const audioBlob = new Blob(walkieAudioChunks, { type: walkieMediaRecorder.mimeType || 'audio/webm' });
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              const base64Audio = reader.result;
+              if (ws && ws.readyState === WebSocket.OPEN && base64Audio) {
+                ws.send(JSON.stringify({
+                  type: 'WALKIE_TALKIE_TRANSMIT',
+                  audioData: base64Audio,
+                  mimeType: audioBlob.type
+                }));
+              }
+            };
+            reader.readAsDataURL(audioBlob);
+          }
+
+          // Reset UI
+          pttBtn.classList.remove('is-transmitting');
+          if (label) label.textContent = 'HOLD TO TALK (SURVIVORS RADIO)';
+          if (waveAnim) waveAnim.style.display = 'none';
+
+          setTimeout(() => {
+            if (banner && !banner.classList.contains('is-incoming')) {
+              banner.style.display = 'none';
+            }
+          }, 600);
+        };
+
+        walkieMediaRecorder.start(100);
+      } catch (err) {
+        console.warn('Microphone permission failed or denied:', err);
+        isWalkieTransmitting = false;
+        pttBtn.classList.remove('is-transmitting');
+        showTacticalToast('Mic permission required for Walkie-Talkie.');
       }
     };
 
-    const handleMove = (clientX, clientY) => {
-      if (!joystickState.active) return;
-      const dx = clientX - joystickState.startX;
-      const dy = clientY - joystickState.startY;
-      const maxDist = 36;
-      const dist = Math.hypot(dx, dy);
-      const angle = Math.atan2(dy, dx);
-      const clampedDist = Math.min(dist, maxDist);
+    const stopTransmission = (e) => {
+      if (e) e.preventDefault();
+      if (!isWalkieTransmitting) return;
+      isWalkieTransmitting = false;
 
-      const tx = Math.cos(angle) * clampedDist;
-      const ty = Math.sin(angle) * clampedDist;
+      // Roger beep tail
+      window.soundEngine?.playRadioEnd();
 
-      thumbEl.style.transform = `translate(${tx}px, ${ty}px)`;
-      joystickState.moveX = tx / maxDist;
-      joystickState.moveY = ty / maxDist;
-    };
-
-    const handleEnd = () => {
-      joystickState.active = false;
-      thumbEl.style.transform = 'translate(0px, 0px)';
-      joystickState.moveX = 0;
-      joystickState.moveY = 0;
-      if (joystickInterval) {
-        clearInterval(joystickInterval);
-        joystickInterval = null;
+      if (walkieMediaRecorder && walkieMediaRecorder.state !== 'inactive') {
+        try {
+          walkieMediaRecorder.stop();
+        } catch (err) {
+          console.warn('MediaRecorder stop warning:', err);
+        }
       }
     };
 
-    joyEl.addEventListener('touchstart', (e) => handleStart(e.touches[0].clientX, e.touches[0].clientY));
-    window.addEventListener('touchmove', (e) => {
-      if (joystickState.active) handleMove(e.touches[0].clientX, e.touches[0].clientY);
-    });
-    window.addEventListener('touchend', handleEnd);
+    // Support Touch (Mobile) and Pointer/Mouse (Desktop)
+    pttBtn.addEventListener('touchstart', startTransmission, { passive: false });
+    pttBtn.addEventListener('touchend', stopTransmission, { passive: false });
+    pttBtn.addEventListener('touchcancel', stopTransmission, { passive: false });
 
-    joyEl.addEventListener('mousedown', (e) => handleStart(e.clientX, e.clientY));
-    window.addEventListener('mousemove', (e) => {
-      if (joystickState.active) handleMove(e.clientX, e.clientY);
+    pttBtn.addEventListener('mousedown', startTransmission);
+    pttBtn.addEventListener('mouseup', stopTransmission);
+    pttBtn.addEventListener('mouseleave', (e) => {
+      if (isWalkieTransmitting) stopTransmission(e);
     });
-    window.addEventListener('mouseup', handleEnd);
 
-    window.addEventListener('keydown', (e) => {
-      if (!screens.hunt.classList.contains('active')) return;
-      const step = 0.00015;
-      let dLat = 0;
-      let dLng = 0;
-      if (e.key === 'ArrowUp' || e.key === 'w') dLat += step;
-      if (e.key === 'ArrowDown' || e.key === 's') dLat -= step;
-      if (e.key === 'ArrowRight' || e.key === 'd') dLng += step;
-      if (e.key === 'ArrowLeft' || e.key === 'a') dLng -= step;
-
-      if (dLat !== 0 || dLng !== 0) {
-        updateAndSendLocation(myPosition.lat + dLat, myPosition.lng + dLng);
-      }
-    });
+    pttBtn.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 
-  function applyJoystickStep() {
-    if (!joystickState.active) return;
-    const speed = 0.000045;
-    const newLat = myPosition.lat - joystickState.moveY * speed;
-    const newLng = myPosition.lng + joystickState.moveX * speed;
-    updateAndSendLocation(newLat, newLng);
+  // Handle incoming Walkie-Talkie audio burst from another Survivor
+  function handleWalkieTalkieReceive(data) {
+    const isZombie = myAssignedRole === 'zombie' || myAssignedRole === 'hunter' || currentRole === 'zombie';
+    if (isZombie) return; // Zombies cannot intercept survivor transmissions
+
+    const banner = document.getElementById('walkie-talkie-banner');
+    const bannerText = document.getElementById('walkie-talkie-banner-text');
+    if (banner) {
+      banner.classList.add('is-incoming');
+      banner.style.display = 'flex';
+      if (bannerText) {
+        bannerText.textContent = `📻 ${escapeHtml(data.senderName || 'SURVIVOR').toUpperCase()}: TRANSMITTING...`;
+      }
+    }
+
+    // Play radio squelch chirp
+    window.soundEngine?.playRadioStart();
+
+    // Play received voice transmission
+    setTimeout(() => {
+      try {
+        const audio = new Audio(data.audioData);
+        audio.volume = 1.0;
+        audio.onended = () => {
+          window.soundEngine?.playRadioEnd();
+          setTimeout(() => {
+            if (banner) {
+              banner.classList.remove('is-incoming');
+              banner.style.display = 'none';
+            }
+          }, 800);
+        };
+        audio.onerror = () => {
+          if (banner) {
+            banner.classList.remove('is-incoming');
+            banner.style.display = 'none';
+          }
+        };
+        audio.play().catch((err) => {
+          console.warn('Audio autoplay failed:', err);
+          if (banner) {
+            banner.classList.remove('is-incoming');
+            banner.style.display = 'none';
+          }
+        });
+      } catch (err) {
+        console.warn('Walkie-talkie audio parse failed:', err);
+      }
+    }, 70);
   }
 
   // --- ZOMBIES TACTICAL ACTIONS & MODAL BINDINGS ---
