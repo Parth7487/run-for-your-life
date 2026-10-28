@@ -533,6 +533,12 @@
               <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
             </svg>
           </button>
+
+          <button id="btn-hud-leave-match" class="hud-pill icon-btn-hud custom-emoticon-btn" title="Leave Match & Return to Menu">
+            <svg class="custom-emoticon" viewBox="0 0 24 24" fill="none" stroke="#ec3013" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>
+            </svg>
+          </button>
         </div>
       </div>
 
@@ -1015,6 +1021,21 @@
       <p class="modal-desc">Select which runner you have tagged in person:</p>
       <div id="tag-runner-options" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;"></div>
       <button id="btn-cancel-tag" class="btn btn-secondary">Cancel</button>
+    </div>
+  </div>
+
+  <!-- MODAL: Confirm Match Exit / Return to Home Modal -->
+  <div id="match-exit-modal" class="modal-overlay" style="display: none; z-index: 4000;">
+    <div class="modal-card" style="max-width: 380px; text-align: center; border: 1px solid rgba(236, 48, 19, 0.4); box-shadow: 0 16px 48px rgba(0,0,0,0.8), 0 0 24px rgba(236, 48, 19, 0.25);">
+      <div style="font-size: 36px; margin-bottom: 8px;">⚠️</div>
+      <h3 class="modal-title" style="color: var(--parchment); margin-bottom: 8px;">EXIT GAMEPLAY?</h3>
+      <p class="modal-desc" style="margin-bottom: 20px;">
+        Are you sure you want to exit the current match and return to the game homepage?
+      </p>
+      <div style="display: flex; gap: 10px; justify-content: center;">
+        <button id="btn-cancel-exit-match" class="btn btn-secondary" style="flex: 1;">RESUME PLAY</button>
+        <button id="btn-confirm-exit-match" class="btn btn-primary" style="flex: 1; background: var(--brand-red); border-color: #ff4d4d;">EXIT TO MENU</button>
+      </div>
     </div>
   </div>
 

@@ -609,34 +609,36 @@ function handleMessage(ws, initialPlayerId, msg) {
         return;
       }
 
-      // If testing solo with 1 human player, spawn a tactical sparring bot for 1v1 play
-      if (room.players.size === 1) {
-        const human = Array.from(room.players.values())[0];
-        const botId = 'bot_' + Math.random().toString(36).substring(2, 7);
-        const centerLat = room.config.arena?.lat || human.lat || 20.464;
-        const centerLng = room.config.arena?.lng || human.lng || 72.893;
-        const botPlayer = createInitialPlayer(
-          botId,
-          'Hunter Titan (Bot)',
-          room.config.arena
-        );
-        botPlayer.lat = centerLat + 0.0003;
-        botPlayer.lng = centerLng + 0.0003;
-        botPlayer.volunteerZombie = true;
-        botPlayer.assignedRole = 'zombie';
-        botPlayer.rolePreference = 'zombie';
-        botPlayer.isBot = true;
-        room.players.set(botId, botPlayer);
-
-        human.assignedRole = 'survivor';
-        human.volunteerZombie = false;
-        human.rolePreference = 'survivor';
-      } else {
-        assignInitialZombies(room);
-      }
+      assignInitialZombies(room);
 
       room.matchLaunchedAt = Date.now();
       startHeadStartPhase(room);
+      break;
+    }
+
+    case 'LEAVE_ROOM': {
+      const room = getRoom(ws);
+      if (room) {
+        room.sockets.delete(playerId);
+        const player = room.players.get(playerId);
+        if (player) {
+          if (player.graceTimeout) clearTimeout(player.graceTimeout);
+          room.players.delete(playerId);
+          broadcastToRoom(room, {
+            type: 'PLAYER_LEFT',
+            playerId: playerId,
+            playerName: player.name
+          });
+          broadcastRoomState(room);
+          checkEndConditions(room);
+        }
+        const activeCount = Array.from(room.players.values()).filter((p) => p.connected).length;
+        if (activeCount === 0) {
+          if (room.timer) clearInterval(room.timer);
+          rooms.delete(room.code);
+        }
+      }
+      ws.roomId = null;
       break;
     }
 
@@ -982,8 +984,29 @@ function assignInitialZombies(room) {
   const playerList = Array.from(room.players.values()).filter((p) => !p.isBot);
   const targetZombies = Math.max(1, parseInt(room.config.startingZombiesCount, 10) || 1);
   const N = playerList.length;
+
+  if (N === 1) {
+    const single = playerList[0];
+    const wantsZombie = single.volunteerZombie || single.rolePreference === 'zombie' || single.rolePreference === 'hunter';
+    if (wantsZombie) {
+      single.assignedRole = 'zombie';
+      single.volunteerZombie = true;
+      single.rolePreference = 'zombie';
+      single.isTagged = true;
+      single.deathType = null;
+      single.taggedBy = 'Patient Zero';
+    } else {
+      single.assignedRole = 'survivor';
+      single.volunteerZombie = false;
+      single.rolePreference = 'survivor';
+      single.isTagged = false;
+      single.escaped = false;
+    }
+    return;
+  }
+
   // Ensure at least 1 survivor if more than 1 human player
-  const actualZombies = N > 1 ? Math.min(targetZombies, N - 1) : 1;
+  const actualZombies = Math.min(targetZombies, N - 1);
 
   // Cryptographically fair Fisher-Yates shuffle
   for (let i = playerList.length - 1; i > 0; i--) {

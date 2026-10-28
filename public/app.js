@@ -2525,62 +2525,110 @@
   let walkieMediaRecorder = null;
   let walkieAudioChunks = [];
   let isWalkieTransmitting = false;
+  let isWalkieButtonHeld = false;
+  let cachedAudioStream = null;
+
+  async function getMicrophoneStream() {
+    if (cachedAudioStream && cachedAudioStream.active) {
+      return cachedAudioStream;
+    }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      return null;
+    }
+    try {
+      cachedAudioStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      });
+      return cachedAudioStream;
+    } catch (e) {
+      console.warn('Microphone permission or access error:', e);
+      return null;
+    }
+  }
 
   function setupWalkieTalkie() {
     const pttBtn = document.getElementById('btn-walkie-talkie');
     if (!pttBtn) return;
 
-    const startTransmission = async (e) => {
-      if (e) e.preventDefault();
-      if (isWalkieTransmitting) return;
+    // Prevent duplicate listener registration
+    if (pttBtn._hasWalkieListeners) return;
+    pttBtn._hasWalkieListeners = true;
 
-      // Ensure operative is an active survivor
+    const label = document.getElementById('walkie-talkie-label');
+    const waveAnim = document.getElementById('ptt-wave-anim');
+    const banner = document.getElementById('walkie-talkie-banner');
+    const bannerText = document.getElementById('walkie-talkie-banner-text');
+
+    const startTransmission = async (e) => {
+      if (e) {
+        if (e.cancelable) e.preventDefault();
+        e.stopPropagation();
+      }
+
+      isWalkieButtonHeld = true;
+
+      // Check operative role: only survivors can transmit
       const isZombie = myAssignedRole === 'zombie' || myAssignedRole === 'hunter' || currentRole === 'zombie';
       if (isZombie) {
-        showTacticalToast('Radio jammed: Zombies cannot transmit.');
+        showTacticalToast('Radio jammed: Zombies screech, they cannot transmit.', '☣️');
         return;
       }
 
+      if (isWalkieTransmitting) return;
+
+      // Instant UI & sound feedback
+      window.soundEngine?.playRadioStart();
+      if (navigator.vibrate) navigator.vibrate(40);
+
+      pttBtn.classList.add('is-transmitting');
+      if (label) label.textContent = 'TRANSMITTING LIVE... (RELEASE TO SEND)';
+      if (waveAnim) waveAnim.style.display = 'flex';
+
+      if (banner) {
+        banner.classList.remove('is-incoming');
+        banner.style.display = 'flex';
+        if (bannerText) bannerText.textContent = '📻 TRANSMITTING LIVE TO SURVIVORS...';
+      }
+
+      const stream = await getMicrophoneStream();
+      if (!stream) {
+        isWalkieButtonHeld = false;
+        pttBtn.classList.remove('is-transmitting');
+        if (label) label.textContent = 'HOLD TO TALK (SURVIVORS RADIO)';
+        if (waveAnim) waveAnim.style.display = 'none';
+        if (banner) banner.style.display = 'none';
+        showTacticalToast('Microphone permission required for radio.', '⚠️');
+        window.AndroidNative?.requestAudioPermission();
+        return;
+      }
+
+      // Check if user already let go of the button during mic acquisition
+      if (!isWalkieButtonHeld) {
+        pttBtn.classList.remove('is-transmitting');
+        if (label) label.textContent = 'HOLD TO TALK (SURVIVORS RADIO)';
+        if (waveAnim) waveAnim.style.display = 'none';
+        if (banner) banner.style.display = 'none';
+        return;
+      }
+
+      isWalkieTransmitting = true;
+      walkieAudioChunks = [];
+
+      let mimeType = 'audio/webm;codecs=opus';
+      if (typeof MediaRecorder.isTypeSupported === 'function') {
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+          mimeType = MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '';
+        }
+      } else {
+        mimeType = '';
+      }
+
       try {
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          showTacticalToast('Microphone not supported on this browser.');
-          return;
-        }
-
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        isWalkieTransmitting = true;
-        walkieAudioChunks = [];
-
-        // UI state
-        pttBtn.classList.add('is-transmitting');
-        const label = document.getElementById('walkie-talkie-label');
-        if (label) label.textContent = 'TRANSMITTING... (RELEASE TO SEND)';
-        const waveAnim = document.getElementById('ptt-wave-anim');
-        if (waveAnim) waveAnim.style.display = 'flex';
-
-        const banner = document.getElementById('walkie-talkie-banner');
-        const bannerText = document.getElementById('walkie-talkie-banner-text');
-        if (banner) {
-          banner.classList.remove('is-incoming');
-          banner.style.display = 'flex';
-          if (bannerText) bannerText.textContent = '📻 TRANSMITTING LIVE TO SURVIVORS...';
-        }
-
-        // Tactical key-up squelch
-        window.soundEngine?.playRadioStart();
-
-        // Determine supported audio mimeType
-        let mimeType = 'audio/webm;codecs=opus';
-        if (typeof MediaRecorder.isTypeSupported === 'function') {
-          if (!MediaRecorder.isTypeSupported(mimeType)) {
-            mimeType = MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '';
-          }
-        } else {
-          mimeType = '';
-        }
-
         walkieMediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
-
         walkieMediaRecorder.ondataavailable = (event) => {
           if (event.data && event.data.size > 0) {
             walkieAudioChunks.push(event.data);
@@ -2588,10 +2636,8 @@
         };
 
         walkieMediaRecorder.onstop = () => {
-          stream.getTracks().forEach((track) => track.stop());
-
           if (walkieAudioChunks.length > 0) {
-            const audioBlob = new Blob(walkieAudioChunks, { type: walkieMediaRecorder.mimeType || 'audio/webm' });
+            const audioBlob = new Blob(walkieAudioChunks, { type: walkieMediaRecorder?.mimeType || 'audio/webm' });
             const reader = new FileReader();
             reader.onloadend = () => {
               const base64Audio = reader.result;
@@ -2606,7 +2652,6 @@
             reader.readAsDataURL(audioBlob);
           }
 
-          // Reset UI
           pttBtn.classList.remove('is-transmitting');
           if (label) label.textContent = 'HOLD TO TALK (SURVIVORS RADIO)';
           if (waveAnim) waveAnim.style.display = 'none';
@@ -2620,20 +2665,34 @@
 
         walkieMediaRecorder.start(100);
       } catch (err) {
-        console.warn('Microphone permission failed or denied:', err);
+        console.warn('MediaRecorder start error:', err);
         isWalkieTransmitting = false;
+        isWalkieButtonHeld = false;
         pttBtn.classList.remove('is-transmitting');
-        showTacticalToast('Mic permission required for Walkie-Talkie.');
       }
     };
 
     const stopTransmission = (e) => {
-      if (e) e.preventDefault();
-      if (!isWalkieTransmitting) return;
-      isWalkieTransmitting = false;
+      if (e) {
+        if (e.cancelable) e.preventDefault();
+        e.stopPropagation();
+      }
 
-      // Roger beep tail
+      isWalkieButtonHeld = false;
+
+      if (!isWalkieTransmitting) {
+        pttBtn.classList.remove('is-transmitting');
+        if (label) label.textContent = 'HOLD TO TALK (SURVIVORS RADIO)';
+        if (waveAnim) waveAnim.style.display = 'none';
+        if (banner && !banner.classList.contains('is-incoming')) {
+          banner.style.display = 'none';
+        }
+        return;
+      }
+
+      isWalkieTransmitting = false;
       window.soundEngine?.playRadioEnd();
+      if (navigator.vibrate) navigator.vibrate(25);
 
       if (walkieMediaRecorder && walkieMediaRecorder.state !== 'inactive') {
         try {
@@ -2644,16 +2703,20 @@
       }
     };
 
-    // Support Touch (Mobile) and Pointer/Mouse (Desktop)
+    // Use Pointer events (preferred across modern mobile & desktop)
+    pttBtn.addEventListener('pointerdown', startTransmission);
+    pttBtn.addEventListener('pointerup', stopTransmission);
+    pttBtn.addEventListener('pointercancel', stopTransmission);
+
+    // Touch fallback
     pttBtn.addEventListener('touchstart', startTransmission, { passive: false });
     pttBtn.addEventListener('touchend', stopTransmission, { passive: false });
     pttBtn.addEventListener('touchcancel', stopTransmission, { passive: false });
 
+    // Mouse fallback
     pttBtn.addEventListener('mousedown', startTransmission);
     pttBtn.addEventListener('mouseup', stopTransmission);
-    pttBtn.addEventListener('mouseleave', (e) => {
-      if (isWalkieTransmitting) stopTransmission(e);
-    });
+    pttBtn.addEventListener('mouseleave', stopTransmission);
 
     pttBtn.addEventListener('contextmenu', (e) => e.preventDefault());
   }
@@ -3066,6 +3129,120 @@
   // GPS & Map Refresh Controls
   document.getElementById('btn-refresh-map')?.addEventListener('click', refreshPlayerGpsAndMap);
   document.getElementById('btn-map-recenter-gps')?.addEventListener('click', refreshPlayerGpsAndMap);
+
+  // --- MATCH EXIT CONFIRMATION MODAL & NAVIGATION ---
+  const matchExitModal = document.getElementById('match-exit-modal');
+  function openMatchExitModal() {
+    window.soundEngine?.playClick();
+    if (matchExitModal) {
+      matchExitModal.style.display = 'flex';
+      matchExitModal.classList.add('active');
+    }
+  }
+
+  function closeMatchExitModal() {
+    window.soundEngine?.playClick();
+    if (matchExitModal) {
+      matchExitModal.style.display = 'none';
+      matchExitModal.classList.remove('active');
+    }
+  }
+
+  function leaveActiveMatchAndGoHome() {
+    closeMatchExitModal();
+    window.soundEngine?.playClick();
+
+    if (activeGameClockInterval) {
+      clearInterval(activeGameClockInterval);
+      activeGameClockInterval = null;
+    }
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      try {
+        ws.send(JSON.stringify({ type: 'LEAVE_ROOM' }));
+      } catch (e) {}
+    }
+    currentRoomCode = null;
+    currentRoomData = null;
+    sessionStorage.removeItem('RFYL_ACTIVE_ROOM');
+    showScreen('landing');
+    showTacticalToast('Returned to Tactical Headquarters', '🏠');
+  }
+
+  document.getElementById('btn-hud-leave-match')?.addEventListener('click', openMatchExitModal);
+  document.getElementById('btn-cancel-exit-match')?.addEventListener('click', closeMatchExitModal);
+  document.getElementById('btn-confirm-exit-match')?.addEventListener('click', leaveActiveMatchAndGoHome);
+  matchExitModal?.addEventListener('click', (e) => {
+    if (e.target.id === 'match-exit-modal') closeMatchExitModal();
+  });
+
+  // --- ANDROID HARDWARE BACK BUTTON INTERCEPTION ---
+  let lastBackPressTime = 0;
+
+  function closeAnyActiveModal() {
+    const modals = [
+      document.getElementById('tutorial-modal'),
+      document.getElementById('modal-services-status'),
+      document.getElementById('modal-my-qr'),
+      document.getElementById('match-exit-modal'),
+      document.getElementById('tag-modal'),
+      document.getElementById('photo-lightbox-modal'),
+      document.getElementById('location-permission-modal')
+    ];
+    let closedAny = false;
+    modals.forEach((m) => {
+      if (m && (m.classList.contains('active') || m.style.display === 'flex' || m.style.display === 'block')) {
+        m.classList.remove('active');
+        m.style.display = 'none';
+        closedAny = true;
+      }
+    });
+
+    const chatDrawer = document.getElementById('chat-drawer');
+    if (chatDrawer && chatDrawer.classList.contains('open')) {
+      chatDrawer.classList.remove('open');
+      isChatOpen = false;
+      closedAny = true;
+    }
+    return closedAny;
+  }
+
+  window.handleAndroidBackButton = function () {
+    // 1. If any modal or drawer is open, dismiss it
+    if (closeAnyActiveModal()) {
+      return true;
+    }
+
+    // 2. Identify currently active screen
+    const currentActiveScreen = Object.entries(screens).find(([_, el]) => el?.classList.contains('active'))?.[0];
+
+    // 3. If in gameplay (hunt or scatter), prompt to abandon match instead of killing the app
+    if (currentActiveScreen === 'hunt' || currentActiveScreen === 'scatter') {
+      openMatchExitModal();
+      return true;
+    }
+
+    // 4. If in lobby, host setup, join, or game-over, return to landing screen
+    if (currentActiveScreen === 'lobby' || currentActiveScreen === 'hostSetup' || currentActiveScreen === 'join' || currentActiveScreen === 'gameOver') {
+      leaveActiveMatchAndGoHome();
+      return true;
+    }
+
+    // 5. If already on landing screen, require double tap to exit whole app
+    if (currentActiveScreen === 'landing') {
+      const now = Date.now();
+      if (now - lastBackPressTime < 2500) {
+        return 'exit_app';
+      }
+      lastBackPressTime = now;
+      showTacticalToast('Press BACK again to exit app', '🚪');
+      return true;
+    }
+
+    return false;
+  };
+
+  setupWalkieTalkie();
+
 
   // --- TACTICAL HARDWARE & SENSOR SERVICES (PLAYCULTURE MATCH) ---
   const RANDOM_CODENAMES = [

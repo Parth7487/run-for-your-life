@@ -3428,7 +3428,9 @@ svg.spinning {
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-touch-callout: none;
   touch-action: none;
+  -webkit-tap-highlight-color: transparent;
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.65), 0 0 12px rgba(59, 130, 246, 0.25);
   transition: all 0.2s ease;
   overflow: hidden;
