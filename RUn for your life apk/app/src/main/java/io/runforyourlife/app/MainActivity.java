@@ -38,25 +38,43 @@ public class MainActivity extends BridgeActivity {
                 Manifest.permission.MODIFY_AUDIO_SETTINGS
             }, 104);
         }
+
+        // Register robust AndroidX OnBackPressedDispatcher callback
+        getOnBackPressedDispatcher().addCallback(this, new androidx.activity.OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                triggerInAppBack();
+            }
+        });
     }
 
-    @Override
-    public void onBackPressed() {
+    private void triggerInAppBack() {
         if (bridge != null && bridge.getWebView() != null) {
             bridge.getWebView().evaluateJavascript(
                 "(function() { return window.handleAndroidBackButton ? window.handleAndroidBackButton() : false; })()",
                 value -> {
                     if ("\"exit_app\"".equals(value) || "exit_app".equals(value)) {
                         finish();
-                    } else if ("false".equals(value) || "null".equals(value)) {
-                        super.onBackPressed();
                     }
-                    // If true, the in-app confirmation modal or screen navigation handled the back press!
                 }
             );
-            return;
+        } else {
+            finish();
         }
-        super.onBackPressed();
+    }
+
+    @Override
+    public boolean onKeyDown(int keyCode, android.view.KeyEvent event) {
+        if (keyCode == android.view.KeyEvent.KEYCODE_BACK) {
+            triggerInAppBack();
+            return true; // Consume back button press so Android never kills the app prematurely
+        }
+        return super.onKeyDown(keyCode, event);
+    }
+
+    @Override
+    public void onBackPressed() {
+        triggerInAppBack();
     }
 
     public static class AndroidBridge {

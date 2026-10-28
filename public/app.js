@@ -2616,6 +2616,7 @@
         isWalkieTransmitting = false;
         resetWalkieUI();
         showTacticalToast('Microphone permission required for radio.', '⚠️');
+        openMicPermissionModal();
         window.AndroidNative?.requestAudioPermission();
         return;
       }
@@ -3213,16 +3214,65 @@
         ws.send(JSON.stringify({ type: 'LEAVE_ROOM' }));
       } catch (e) {}
     }
+    if (typeof peerMarkers !== 'undefined' && peerMarkers) {
+      peerMarkers.forEach((entry) => {
+        if (gameMap && gameMap.hasLayer(entry.marker)) gameMap.removeLayer(entry.marker);
+      });
+      peerMarkers.clear();
+    }
     currentRoomCode = null;
     currentRoomData = null;
     sessionStorage.removeItem('RFYL_ACTIVE_ROOM');
+    sessionStorage.removeItem('RFYL_ACTIVE_PLAYER_ID');
+    localStorage.removeItem('RFYL_ACTIVE_ROOM');
     showScreen('landing');
     showTacticalToast('Returned to Tactical Headquarters', '🏠');
   }
 
+  // --- WALKIE-TALKIE MICROPHONE PERMISSION MODAL ---
+  const micPermissionModal = document.getElementById('mic-permission-modal');
+  function openMicPermissionModal() {
+    window.soundEngine?.playClick();
+    if (micPermissionModal) {
+      micPermissionModal.style.display = 'flex';
+      micPermissionModal.classList.add('active');
+    }
+  }
+
+  function closeMicPermissionModal() {
+    window.soundEngine?.playClick();
+    if (micPermissionModal) {
+      micPermissionModal.style.display = 'none';
+      micPermissionModal.classList.remove('active');
+    }
+  }
+
+  document.getElementById('btn-allow-mic')?.addEventListener('click', async () => {
+    window.soundEngine?.playClick();
+    closeMicPermissionModal();
+    showTacticalToast('Requesting Microphone Access...', '🎙️');
+    window.AndroidNative?.requestAudioPermission();
+    const stream = await getMicrophoneStream();
+    if (stream) {
+      showTacticalToast('🎙️ Microphone Active for Walkie-Talkie Radio!', '✅');
+      refreshHardwareStatus();
+    } else {
+      showTacticalToast('Microphone access denied or unavailable.', '⚠️');
+    }
+  });
+
+  document.getElementById('btn-cancel-mic')?.addEventListener('click', closeMicPermissionModal);
+  micPermissionModal?.addEventListener('click', (e) => {
+    if (e.target.id === 'mic-permission-modal') closeMicPermissionModal();
+  });
+
+  // Bind all exit / leave buttons across screens
   document.getElementById('btn-hud-leave-match')?.addEventListener('click', openMatchExitModal);
   document.getElementById('btn-cancel-exit-match')?.addEventListener('click', closeMatchExitModal);
   document.getElementById('btn-confirm-exit-match')?.addEventListener('click', leaveActiveMatchAndGoHome);
+  document.getElementById('btn-lobby-exit-menu')?.addEventListener('click', leaveActiveMatchAndGoHome);
+  document.getElementById('btn-lobby-leave-bottom')?.addEventListener('click', leaveActiveMatchAndGoHome);
+  document.getElementById('btn-scatter-exit-match')?.addEventListener('click', openMatchExitModal);
   matchExitModal?.addEventListener('click', (e) => {
     if (e.target.id === 'match-exit-modal') closeMatchExitModal();
   });
@@ -3236,6 +3286,7 @@
       document.getElementById('modal-services-status'),
       document.getElementById('modal-my-qr'),
       document.getElementById('match-exit-modal'),
+      document.getElementById('mic-permission-modal'),
       document.getElementById('tag-modal'),
       document.getElementById('photo-lightbox-modal'),
       document.getElementById('location-permission-modal')
@@ -3362,6 +3413,18 @@
     }
   });
 
+  document.getElementById('btn-grant-mic')?.addEventListener('click', () => {
+    window.soundEngine?.playClick();
+    openMicPermissionModal();
+  });
+
+  document.getElementById('btn-settings-mic')?.addEventListener('click', () => {
+    window.soundEngine?.playClick();
+    if (window.AndroidNative && window.AndroidNative.openAppSettings) {
+      window.AndroidNative.openAppSettings();
+    }
+  });
+
   document.getElementById('btn-grant-ble')?.addEventListener('click', () => {
     window.soundEngine?.playClick();
     if (window.AndroidNative && window.AndroidNative.requestBluetoothPermission) {
@@ -3410,6 +3473,7 @@
     let locGranted = false;
     let bleGranted = false;
     let camGranted = false;
+    let micGranted = false;
 
     if (window.AndroidNative && window.AndroidNative.checkPermissions) {
       try {
@@ -3418,6 +3482,7 @@
         locGranted = !!info.location;
         bleGranted = !!info.bluetooth;
         camGranted = !!info.camera;
+        micGranted = !!info.audio;
       } catch (e) {
         console.error('Error querying AndroidNative:', e);
       }
@@ -3426,6 +3491,7 @@
       locGranted = hasLocationPermission;
       bleGranted = true; // Simulated in browser
       camGranted = true;
+      micGranted = Boolean(cachedAudioStream && cachedAudioStream.active);
     }
 
     // 1. Update Network UI
@@ -3467,6 +3533,24 @@
       if (pillGps) { pillGps.innerHTML = '<span class="pill-dot red"></span>GPS'; }
       if (iconboxGps) { iconboxGps.className = 'service-icon-box status-warning'; }
       if (btnGrantGps) { btnGrantGps.style.display = 'inline-block'; }
+    }
+
+    // 2.5 Update Microphone (Walkie-Talkie Radio) UI
+    const badgeMic = document.getElementById('badge-mic-status');
+    const iconboxMic = document.getElementById('iconbox-mic');
+    const micDetails = document.getElementById('service-mic-details');
+    const btnGrantMic = document.getElementById('btn-grant-mic');
+
+    if (micGranted || (cachedAudioStream && cachedAudioStream.active)) {
+      if (badgeMic) { badgeMic.textContent = 'ACTIVE'; badgeMic.className = 'service-badge-pill green'; }
+      if (iconboxMic) { iconboxMic.className = 'service-icon-box status-active'; }
+      if (micDetails) { micDetails.textContent = 'Microphone active for Survivor Push-To-Talk radio'; }
+      if (btnGrantMic) { btnGrantMic.style.display = 'none'; }
+    } else {
+      if (badgeMic) { badgeMic.textContent = 'PERMISSION NEEDED'; badgeMic.className = 'service-badge-pill'; }
+      if (iconboxMic) { iconboxMic.className = 'service-icon-box status-warning'; }
+      if (micDetails) { micDetails.textContent = 'Required for Survivors Walkie-Talkie voice radio'; }
+      if (btnGrantMic) { btnGrantMic.style.display = 'inline-block'; }
     }
 
     // 3. Update BLE UI
