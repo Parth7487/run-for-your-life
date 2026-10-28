@@ -2527,6 +2527,8 @@
   let isWalkieTransmitting = false;
   let isWalkieButtonHeld = false;
   let cachedAudioStream = null;
+  let walkiePressStartTime = 0;
+  let walkieSafetyTimer = null;
 
   async function getMicrophoneStream() {
     if (cachedAudioStream && cachedAudioStream.active) {
@@ -2550,6 +2552,24 @@
     }
   }
 
+  function resetWalkieUI() {
+    const pttBtn = document.getElementById('btn-walkie-talkie');
+    const label = document.getElementById('walkie-talkie-label');
+    const waveAnim = document.getElementById('ptt-wave-anim');
+    const banner = document.getElementById('walkie-talkie-banner');
+
+    if (pttBtn) pttBtn.classList.remove('is-transmitting');
+    if (label) label.textContent = 'HOLD TO TALK (SURVIVORS RADIO)';
+    if (waveAnim) waveAnim.style.display = 'none';
+    if (banner && !banner.classList.contains('is-incoming')) {
+      banner.style.display = 'none';
+    }
+    if (walkieSafetyTimer) {
+      clearTimeout(walkieSafetyTimer);
+      walkieSafetyTimer = null;
+    }
+  }
+
   function setupWalkieTalkie() {
     const pttBtn = document.getElementById('btn-walkie-talkie');
     if (!pttBtn) return;
@@ -2563,29 +2583,25 @@
     const banner = document.getElementById('walkie-talkie-banner');
     const bannerText = document.getElementById('walkie-talkie-banner-text');
 
-    const startTransmission = async (e) => {
-      if (e) {
-        if (e.cancelable) e.preventDefault();
-        e.stopPropagation();
-      }
+    // Pre-warm microphone permission proactively in background
+    getMicrophoneStream().catch(() => {});
 
-      isWalkieButtonHeld = true;
-
+    const startRecording = async () => {
       // Check operative role: only survivors can transmit
       const isZombie = myAssignedRole === 'zombie' || myAssignedRole === 'hunter' || currentRole === 'zombie';
       if (isZombie) {
         showTacticalToast('Radio jammed: Zombies screech, they cannot transmit.', '☣️');
+        isWalkieButtonHeld = false;
+        resetWalkieUI();
         return;
       }
 
-      if (isWalkieTransmitting) return;
-
-      // Instant UI & sound feedback
+      // Audio & haptic cue
       window.soundEngine?.playRadioStart();
       if (navigator.vibrate) navigator.vibrate(40);
 
       pttBtn.classList.add('is-transmitting');
-      if (label) label.textContent = 'TRANSMITTING LIVE... (RELEASE TO SEND)';
+      if (label) label.textContent = 'TRANSMITTING LIVE...';
       if (waveAnim) waveAnim.style.display = 'flex';
 
       if (banner) {
@@ -2597,21 +2613,10 @@
       const stream = await getMicrophoneStream();
       if (!stream) {
         isWalkieButtonHeld = false;
-        pttBtn.classList.remove('is-transmitting');
-        if (label) label.textContent = 'HOLD TO TALK (SURVIVORS RADIO)';
-        if (waveAnim) waveAnim.style.display = 'none';
-        if (banner) banner.style.display = 'none';
+        isWalkieTransmitting = false;
+        resetWalkieUI();
         showTacticalToast('Microphone permission required for radio.', '⚠️');
         window.AndroidNative?.requestAudioPermission();
-        return;
-      }
-
-      // Check if user already let go of the button during mic acquisition
-      if (!isWalkieButtonHeld) {
-        pttBtn.classList.remove('is-transmitting');
-        if (label) label.textContent = 'HOLD TO TALK (SURVIVORS RADIO)';
-        if (waveAnim) waveAnim.style.display = 'none';
-        if (banner) banner.style.display = 'none';
         return;
       }
 
@@ -2652,41 +2657,30 @@
             reader.readAsDataURL(audioBlob);
           }
 
-          pttBtn.classList.remove('is-transmitting');
-          if (label) label.textContent = 'HOLD TO TALK (SURVIVORS RADIO)';
-          if (waveAnim) waveAnim.style.display = 'none';
-
-          setTimeout(() => {
-            if (banner && !banner.classList.contains('is-incoming')) {
-              banner.style.display = 'none';
-            }
-          }, 600);
+          resetWalkieUI();
         };
 
         walkieMediaRecorder.start(100);
+
+        // 15-second safety auto-cutoff to prevent runaway transmission
+        if (walkieSafetyTimer) clearTimeout(walkieSafetyTimer);
+        walkieSafetyTimer = setTimeout(() => {
+          if (isWalkieTransmitting) {
+            stopRecording();
+          }
+        }, 15000);
       } catch (err) {
         console.warn('MediaRecorder start error:', err);
         isWalkieTransmitting = false;
         isWalkieButtonHeld = false;
-        pttBtn.classList.remove('is-transmitting');
+        resetWalkieUI();
       }
     };
 
-    const stopTransmission = (e) => {
-      if (e) {
-        if (e.cancelable) e.preventDefault();
-        e.stopPropagation();
-      }
-
+    const stopRecording = () => {
       isWalkieButtonHeld = false;
-
       if (!isWalkieTransmitting) {
-        pttBtn.classList.remove('is-transmitting');
-        if (label) label.textContent = 'HOLD TO TALK (SURVIVORS RADIO)';
-        if (waveAnim) waveAnim.style.display = 'none';
-        if (banner && !banner.classList.contains('is-incoming')) {
-          banner.style.display = 'none';
-        }
+        resetWalkieUI();
         return;
       }
 
@@ -2694,29 +2688,88 @@
       window.soundEngine?.playRadioEnd();
       if (navigator.vibrate) navigator.vibrate(25);
 
+      if (walkieSafetyTimer) {
+        clearTimeout(walkieSafetyTimer);
+        walkieSafetyTimer = null;
+      }
+
       if (walkieMediaRecorder && walkieMediaRecorder.state !== 'inactive') {
         try {
           walkieMediaRecorder.stop();
         } catch (err) {
           console.warn('MediaRecorder stop warning:', err);
+          resetWalkieUI();
         }
+      } else {
+        resetWalkieUI();
       }
     };
 
-    // Use Pointer events (preferred across modern mobile & desktop)
-    pttBtn.addEventListener('pointerdown', startTransmission);
-    pttBtn.addEventListener('pointerup', stopTransmission);
-    pttBtn.addEventListener('pointercancel', stopTransmission);
+    const handlePressDown = (e) => {
+      if (e) {
+        if (e.cancelable) e.preventDefault();
+        e.stopPropagation();
+        if (e.pointerId && typeof pttBtn.setPointerCapture === 'function') {
+          try { pttBtn.setPointerCapture(e.pointerId); } catch (_) {}
+        }
+      }
 
-    // Touch fallback
-    pttBtn.addEventListener('touchstart', startTransmission, { passive: false });
-    pttBtn.addEventListener('touchend', stopTransmission, { passive: false });
-    pttBtn.addEventListener('touchcancel', stopTransmission, { passive: false });
+      // If user tapped while ALREADY transmitting (in Tap-to-Talk hands-free mode), stop and send!
+      if (isWalkieTransmitting) {
+        stopRecording();
+        return;
+      }
 
-    // Mouse fallback
-    pttBtn.addEventListener('mousedown', startTransmission);
-    pttBtn.addEventListener('mouseup', stopTransmission);
-    pttBtn.addEventListener('mouseleave', stopTransmission);
+      isWalkieButtonHeld = true;
+      walkiePressStartTime = Date.now();
+      startRecording();
+    };
+
+    const handlePressUp = (e) => {
+      if (e) {
+        if (e.cancelable) e.preventDefault();
+        e.stopPropagation();
+        if (e.pointerId && typeof pttBtn.releasePointerCapture === 'function') {
+          try { pttBtn.releasePointerCapture(e.pointerId); } catch (_) {}
+        }
+      }
+
+      isWalkieButtonHeld = false;
+      const duration = Date.now() - walkiePressStartTime;
+
+      // If tapped quickly (< 350ms), switch into hands-free "Tap-to-Talk" mode
+      if (duration < 350 && isWalkieTransmitting) {
+        if (label) label.textContent = '🎙️ LIVE (TAP AGAIN TO SEND)';
+        if (bannerText) bannerText.textContent = '📻 TRANSMITTING LIVE... (TAP TO SEND)';
+        return; // Keep recording until tapped again or 15s safety cutoff fires
+      }
+
+      // If held for >= 350ms, this was "Hold-to-Talk": release stops and sends immediately
+      stopRecording();
+    };
+
+    const handlePressCancel = (e) => {
+      if (e && e.pointerId && typeof pttBtn.releasePointerCapture === 'function') {
+        try { pttBtn.releasePointerCapture(e.pointerId); } catch (_) {}
+      }
+      stopRecording();
+    };
+
+    // Use Pointer Events if available for unified mouse/touch handling with pointer capture
+    if ('onpointerdown' in window) {
+      pttBtn.addEventListener('pointerdown', handlePressDown);
+      pttBtn.addEventListener('pointerup', handlePressUp);
+      pttBtn.addEventListener('pointercancel', handlePressCancel);
+    } else {
+      // Touch fallback for older devices
+      pttBtn.addEventListener('touchstart', handlePressDown, { passive: false });
+      pttBtn.addEventListener('touchend', handlePressUp, { passive: false });
+      pttBtn.addEventListener('touchcancel', handlePressCancel, { passive: false });
+      // Mouse fallback
+      pttBtn.addEventListener('mousedown', handlePressDown);
+      pttBtn.addEventListener('mouseup', handlePressUp);
+      pttBtn.addEventListener('mouseleave', handlePressCancel);
+    }
 
     pttBtn.addEventListener('contextmenu', (e) => e.preventDefault());
   }
@@ -2753,23 +2806,22 @@
             }
           }, 800);
         };
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          playPromise.catch((err) => {
+            console.warn('Audio playback error:', err);
+          });
+        }
         audio.onerror = () => {
           if (banner) {
             banner.classList.remove('is-incoming');
             banner.style.display = 'none';
           }
         };
-        audio.play().catch((err) => {
-          console.warn('Audio autoplay failed:', err);
-          if (banner) {
-            banner.classList.remove('is-incoming');
-            banner.style.display = 'none';
-          }
-        });
       } catch (err) {
-        console.warn('Walkie-talkie audio parse failed:', err);
+        console.warn('Audio construction error:', err);
       }
-    }, 70);
+    }, 150);
   }
 
   // --- ZOMBIES TACTICAL ACTIONS & MODAL BINDINGS ---

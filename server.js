@@ -1008,11 +1008,14 @@ function assignInitialZombies(room) {
   // Ensure at least 1 survivor if more than 1 human player
   const actualZombies = Math.min(targetZombies, N - 1);
 
-  // Cryptographically fair Fisher-Yates shuffle
-  for (let i = playerList.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [playerList[i], playerList[j]] = [playerList[j], playerList[i]];
-  }
+  // Prioritize operatives who volunteered or chose Zombie/Hunter role
+  playerList.sort((a, b) => {
+    const aWants = a.volunteerZombie || a.rolePreference === 'zombie' || a.rolePreference === 'hunter';
+    const bWants = b.volunteerZombie || b.rolePreference === 'zombie' || b.rolePreference === 'hunter';
+    if (aWants && !bWants) return -1;
+    if (!aWants && bWants) return 1;
+    return Math.random() - 0.5;
+  });
 
   // Exactly `actualZombies` become Zombies, the remaining become Survivors
   playerList.forEach((p, idx) => {
