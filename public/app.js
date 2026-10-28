@@ -3205,28 +3205,31 @@
     closeMatchExitModal();
     window.soundEngine?.playClick();
 
-    if (activeGameClockInterval) {
-      clearInterval(activeGameClockInterval);
-      activeGameClockInterval = null;
-    }
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      try {
+    try {
+      if (activeGameClockInterval) {
+        clearInterval(activeGameClockInterval);
+        activeGameClockInterval = null;
+      }
+      if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'LEAVE_ROOM' }));
-      } catch (e) {}
+      }
+      if (typeof peerMarkers !== 'undefined' && peerMarkers) {
+        peerMarkers.forEach((entry) => {
+          if (gameMap && gameMap.hasLayer(entry.marker)) gameMap.removeLayer(entry.marker);
+        });
+        peerMarkers.clear();
+      }
+      myRoomCode = null;
+      currentRoomData = null;
+      sessionStorage.removeItem('RFYL_ACTIVE_ROOM');
+      sessionStorage.removeItem('RFYL_ACTIVE_PLAYER_ID');
+      localStorage.removeItem('RFYL_ACTIVE_ROOM');
+    } catch (err) {
+      console.warn('Cleanup error during leave room:', err);
+    } finally {
+      showScreen('landing');
+      showTacticalToast('Returned to Tactical Headquarters', '🏠');
     }
-    if (typeof peerMarkers !== 'undefined' && peerMarkers) {
-      peerMarkers.forEach((entry) => {
-        if (gameMap && gameMap.hasLayer(entry.marker)) gameMap.removeLayer(entry.marker);
-      });
-      peerMarkers.clear();
-    }
-    currentRoomCode = null;
-    currentRoomData = null;
-    sessionStorage.removeItem('RFYL_ACTIVE_ROOM');
-    sessionStorage.removeItem('RFYL_ACTIVE_PLAYER_ID');
-    localStorage.removeItem('RFYL_ACTIVE_ROOM');
-    showScreen('landing');
-    showTacticalToast('Returned to Tactical Headquarters', '🏠');
   }
 
   // --- WALKIE-TALKIE MICROPHONE PERMISSION MODAL ---
