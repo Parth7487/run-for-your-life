@@ -217,6 +217,30 @@ function sendToPlayer(room, playerId, data) {
 
 // HTTP Server
 const server = http.createServer((req, res) => {
+  // Over-The-Air (OTA) live version checking endpoint
+  if (req.url && req.url.startsWith('/api/version')) {
+    res.writeHead(200, {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Access-Control-Allow-Origin': '*'
+    });
+    res.end(
+      JSON.stringify({
+        app: 'Run for Your Life',
+        version: '1.2.0',
+        build: '2026.10.28-hot-sync',
+        features: [
+          'Push-to-Talk Walkie-Talkie',
+          '20m Zombie Horror Threat',
+          'Live GPS High Accuracy',
+          '1-Click Cloud Hot Update'
+        ],
+        timestamp: Date.now()
+      })
+    );
+    return;
+  }
+
   let reqPath = req.url.split('?')[0];
   if (reqPath === '/' || reqPath === '') {
     reqPath = '/index.html';

@@ -126,6 +126,12 @@
           </div>
         </div>
         <div class="header-actions">
+          <button id="btn-sync-update-cloud" class="icon-button custom-emoticon-btn btn-update-cloud-sync" title="Check for Updates • 1-Click Cloud Live Sync">
+            <svg class="custom-emoticon" viewBox="0 0 24 24" fill="none">
+              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" stroke="#00e5ff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span class="update-pulse-dot" title="Cloud Sync Active"></span>
+          </button>
           <button id="btn-open-tutorial" class="icon-button custom-emoticon-btn" title="Field Manual & Game Rules">
             <svg class="custom-emoticon" viewBox="0 0 24 24" fill="none">
               <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z" fill="rgba(255,255,255,0.08)" stroke="currentColor" stroke-width="1.8"/>
@@ -223,6 +229,18 @@
           <span class="tutorial-badge-pulse" style="background: rgba(16, 185, 129, 0.2); border-color: #10b981; color: #10b981;">OFFICIAL RULES</span>
         </div>
         <span class="card-desc">Complete tactical rulebook: Zombies vs Survivors, 5m chase infection, 15m sonar beep warning, 60s boundary rule, and map zones.</span>
+      </button>
+
+      <!-- 1-Click Cloud Live Hot Update Card -->
+      <button id="btn-cloud-hot-update" class="action-card hot-update-action-card">
+        <div class="card-header-row">
+          <span class="card-title" style="display: flex; align-items: center; gap: 8px;">
+            <span class="update-icon-pulse">⚡</span>
+            Check for Updates
+          </span>
+          <span class="hot-update-badge" id="hot-update-version-label">v1.2.0 • 1-CLICK SYNC</span>
+        </div>
+        <span class="card-desc">Instantly update the game to the newest version with bug fixes and features from the cloud without reinstalling the APK!</span>
       </button>
     </div>
 
@@ -507,6 +525,12 @@
               <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z" fill="rgba(249,232,172,0.12)" stroke="var(--parchment)" stroke-width="1.8"/>
               <path d="M6 2v20" stroke="var(--parchment)" stroke-width="1.8"/>
               <path d="M15 2v6l2-1.2 2 1.2V2" fill="var(--crimson)"/>
+            </svg>
+          </button>
+
+          <button id="btn-hud-sync-update" class="hud-pill icon-btn-hud custom-emoticon-btn btn-update-cloud-sync" title="Check for Updates (1-Click Cloud Live Sync)">
+            <svg class="custom-emoticon" viewBox="0 0 24 24" fill="none" stroke="#00e5ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
             </svg>
           </button>
         </div>

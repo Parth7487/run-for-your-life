@@ -3343,4 +3343,77 @@
       }
     }
   });
+
+  // --- 1-CLICK CLOUD OVER-THE-AIR (OTA) LIVE UPDATER ---
+  function setupLiveUpdater() {
+    const updateButtons = [
+      document.getElementById('btn-sync-update-cloud'),
+      document.getElementById('btn-cloud-hot-update'),
+      document.getElementById('btn-hud-sync-update')
+    ].filter(Boolean);
+
+    const versionBadge = document.getElementById('hot-update-version-label');
+
+    // Query version on initial boot
+    fetch('/api/version?_t=' + Date.now(), { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && versionBadge && data.version) {
+          versionBadge.textContent = `${data.version} • LIVE SYNC`;
+        }
+      })
+      .catch(() => {});
+
+    let isUpdating = false;
+
+    async function triggerUpdate() {
+      if (isUpdating) return;
+      isUpdating = true;
+
+      window.soundEngine?.playClick();
+      if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
+
+      showTacticalToast('⚡ Checking cloud for updates...', '📡');
+      updateButtons.forEach((btn) => btn.classList.add('updating-spin'));
+
+      try {
+        const resp = await fetch('/api/version?_t=' + Date.now(), {
+          cache: 'no-store',
+          headers: { 'Cache-Control': 'no-cache, no-store' }
+        });
+
+        const info = resp.ok ? await resp.json() : null;
+
+        // Clear all CacheStorage if present
+        if ('caches' in window) {
+          try {
+            const cacheNames = await caches.keys();
+            await Promise.all(cacheNames.map((name) => caches.delete(name)));
+          } catch (e) {
+            console.warn('Cache clearing notice:', e);
+          }
+        }
+
+        const buildLabel = info?.version ? `${info.version} (${info.build})` : 'Production Cloud';
+        showTacticalToast(`🚀 Updating to ${buildLabel}...`, '⚡');
+
+        setTimeout(() => {
+          const targetUrl = window.location.origin + window.location.pathname + '?_ota=' + Date.now();
+          window.location.replace(targetUrl);
+        }, 700);
+      } catch (err) {
+        console.warn('OTA Sync fallback to reload:', err);
+        showTacticalToast('🔄 Syncing fresh code from cloud...', '⚡');
+        setTimeout(() => {
+          window.location.reload(true);
+        }, 700);
+      }
+    }
+
+    updateButtons.forEach((btn) => {
+      btn.addEventListener('click', triggerUpdate);
+    });
+  }
+
+  setupLiveUpdater();
 })();

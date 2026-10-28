@@ -3557,4 +3557,59 @@ svg.spinning {
 .radio-sound-bars span:nth-child(4) { animation-delay: 0.08s; }
 .radio-sound-bars span:nth-child(5) { animation-delay: 0.2s; }
 
+/* 1-Click Cloud Live Hot Update Styles */
+.hot-update-action-card {
+  background: linear-gradient(135deg, rgba(10, 24, 34, 0.95) 0%, rgba(8, 32, 26, 0.9) 100%);
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  box-shadow: 0 4px 20px rgba(0, 229, 255, 0.1);
+  position: relative;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.hot-update-action-card:hover {
+  border-color: #00e5ff;
+  box-shadow: 0 6px 26px rgba(0, 229, 255, 0.25);
+  transform: translateY(-2px);
+}
+
+.hot-update-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 800;
+  background: rgba(0, 229, 255, 0.15);
+  color: #00e5ff;
+  border: 1px solid rgba(0, 229, 255, 0.4);
+  padding: 3px 8px;
+  border-radius: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.btn-update-cloud-sync {
+  position: relative;
+}
+
+.update-pulse-dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  background: #00e5ff;
+  border-radius: 50%;
+  box-shadow: 0 0 8px #00e5ff;
+  animation: beaconPulse 1.8s infinite ease-in-out;
+}
+
+@keyframes spinIcon {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.updating-spin svg {
+  animation: spinIcon 0.75s linear infinite !important;
+}
+
+
 
