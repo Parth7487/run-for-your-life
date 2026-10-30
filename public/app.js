@@ -101,15 +101,28 @@
   };
 
   function showScreen(name) {
-    Object.values(screens).forEach((s) => s.classList.remove('active'));
+    Object.values(screens).forEach((s) => s?.classList?.remove('active'));
     if (screens[name]) {
       screens[name].classList.add('active');
     }
+
+    // Push history state for seamless Android hardware & browser back-button navigation
+    try {
+      if (window.history && window.history.pushState) {
+        window.history.pushState({ screen: name }, '', '#' + name);
+      }
+    } catch (_) {}
+
     // Resize map when entering map screens
     setTimeout(() => {
       if (name === 'hostSetup' && setupMap) setupMap.invalidateSize();
       if (name === 'hunt' && gameMap) gameMap.invalidateSize();
     }, 150);
+
+    // Refresh lobby hardware status whenever lobby is opened
+    if (name === 'lobby') {
+      updateLobbyHardwareStatus();
+    }
   }
 
   // --- DRAMATIC TAKOBE PRELOADER ---
@@ -698,7 +711,7 @@
     updateRunnersAliveCount();
   }
 
-  // --- LOCATION PERMISSION SYSTEM ---
+  // --- TACTICAL CLEARANCE (GPS & WALKIE-TALKIE MIC) PERMISSION SYSTEM ---
   function requestLocationPermission(actionCallback) {
     if (hasLocationPermission) {
       actionCallback();
@@ -706,12 +719,79 @@
     }
 
     pendingActionAfterPermission = actionCallback;
-    document.getElementById('location-permission-modal').classList.add('active');
+    const modal = document.getElementById('location-permission-modal');
+    if (modal) {
+      modal.style.display = 'flex';
+      modal.classList.add('active');
+    }
   }
 
-  document.getElementById('btn-allow-gps').addEventListener('click', () => {
+  function closeLocationModal() {
+    const modal = document.getElementById('location-permission-modal');
+    if (modal) {
+      modal.style.display = 'none';
+      modal.classList.remove('active');
+    }
+  }
+
+  function completePermissionSuccess() {
+    hasLocationPermission = true;
+    const gpsLabel = document.getElementById('gps-btn-label');
+    if (gpsLabel) gpsLabel.textContent = 'GPS';
+    refreshHardwareStatus();
+    updateLobbyHardwareStatus();
+
+    if (setupMap && myPosition) setupMap.setView([myPosition.lat, myPosition.lng], 16);
+    if (pendingActionAfterPermission) {
+      const cb = pendingActionAfterPermission;
+      pendingActionAfterPermission = null;
+      cb();
+    }
+  }
+
+  // Grant BOTH: GPS Radar and Walkie-Talkie Microphone
+  document.getElementById('btn-allow-all-permissions')?.addEventListener('click', () => {
     window.soundEngine?.playClick();
-    document.getElementById('location-permission-modal').classList.remove('active');
+    closeLocationModal();
+    showTacticalToast('Authorizing GPS Radar & Walkie-Talkie Mic...', '⚡');
+
+    // 1. Proactively request and pre-warm Microphone in background
+    window.AndroidNative?.requestAudioPermission();
+    getMicrophoneStream()
+      .then((stream) => {
+        if (stream) {
+          showTacticalToast('🎙️ Walkie-Talkie Radio Ready!', '✅');
+          refreshHardwareStatus();
+          updateLobbyHardwareStatus();
+        }
+      })
+      .catch((err) => console.warn('Microphone pre-flight authorization note:', err));
+
+    // 2. Request GPS Location in background
+    if (window.AndroidNative?.requestLocationPermission) {
+      window.AndroidNative.requestLocationPermission();
+    }
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          myPosition = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          if (setupMap) setupMap.setView([myPosition.lat, myPosition.lng], 16);
+          refreshHardwareStatus();
+        },
+        (err) => console.warn('Background GPS initial fix note:', err),
+        { enableHighAccuracy: true, timeout: 8000 }
+      );
+    }
+
+    // 3. Immediately transition to target screen without blocking on satellite lock
+    completePermissionSuccess();
+  });
+
+  // Grant GPS Only (Radio Muted)
+  document.getElementById('btn-allow-gps')?.addEventListener('click', () => {
+    window.soundEngine?.playClick();
+    closeLocationModal();
 
     if (window.AndroidNative?.requestLocationPermission) {
       window.AndroidNative.requestLocationPermission();
@@ -720,48 +800,51 @@
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          hasLocationPermission = true;
           myPosition = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          const gpsLabel = document.getElementById('gps-btn-label');
-          if (gpsLabel) gpsLabel.textContent = 'GPS';
-          refreshHardwareStatus();
-
           if (setupMap) setupMap.setView([myPosition.lat, myPosition.lng], 16);
-          if (pendingActionAfterPermission) {
-            pendingActionAfterPermission();
-            pendingActionAfterPermission = null;
-          }
-        },
-        (err) => {
-          console.warn('GPS permission denied or unavailable:', err);
-          hasLocationPermission = true;
-          const gpsLabel = document.getElementById('gps-btn-label');
-          if (gpsLabel) gpsLabel.textContent = 'GPS';
           refreshHardwareStatus();
-          if (pendingActionAfterPermission) {
-            pendingActionAfterPermission();
-            pendingActionAfterPermission = null;
-          }
         },
+        (err) => console.warn('Background GPS initial fix note:', err),
         { enableHighAccuracy: true, timeout: 8000 }
       );
-    } else {
-      hasLocationPermission = true;
-      refreshHardwareStatus();
-      if (pendingActionAfterPermission) pendingActionAfterPermission();
     }
+
+    // Immediately transition
+    completePermissionSuccess();
   });
 
   document.getElementById('btn-deny-gps')?.addEventListener('click', () => {
     window.soundEngine?.playClick();
-    document.getElementById('location-permission-modal')?.classList.remove('active');
-    hasLocationPermission = true;
-    const gpsLabel = document.getElementById('gps-btn-label');
-    if (gpsLabel) gpsLabel.textContent = 'GPS';
-    if (pendingActionAfterPermission) {
-      pendingActionAfterPermission();
-      pendingActionAfterPermission = null;
+    closeLocationModal();
+    completePermissionSuccess();
+  });
+
+  // Lobby Hardware Readiness Status
+  function updateLobbyHardwareStatus() {
+    const statusLabel = document.getElementById('lobby-mic-status-label');
+    const grantBtn = document.getElementById('btn-lobby-grant-mic');
+    const icon = document.getElementById('lobby-mic-icon');
+    if (!statusLabel) return;
+
+    const micReady = Boolean(cachedAudioStream && cachedAudioStream.active);
+    if (micReady) {
+      statusLabel.textContent = 'ONLINE & READY';
+      statusLabel.style.color = '#34d399';
+      if (grantBtn) grantBtn.style.display = 'none';
+      if (icon) icon.textContent = '🎙️';
+    } else {
+      statusLabel.textContent = 'MIC ACCESS NEEDED (TAP TO ENABLE)';
+      statusLabel.style.color = '#f59e0b';
+      if (grantBtn) {
+        grantBtn.style.display = 'block';
+      }
+      if (icon) icon.textContent = '⚠️';
     }
+  }
+
+  document.getElementById('btn-lobby-grant-mic')?.addEventListener('click', () => {
+    window.soundEngine?.playClick();
+    openMicPermissionModal();
   });
 
   // Sound Toggle with Custom Vector Emoticon waves / slash
@@ -1987,6 +2070,9 @@
       }
     }
 
+    const isZombieRole = myAssignedRole === 'zombie' || myAssignedRole === 'hunter' || currentRole === 'zombie';
+    const isSurvivor = !isZombieRole;
+
     if (threatTextEl) {
       if (myActiveEffects?.cloaked) {
         threatTextEl.textContent = 'CLOAK ACTIVE 🥷';
@@ -1995,14 +2081,12 @@
         threatTextEl.textContent = `FRESH MEAT: ${msg.freshMeatTarget.name} (${msg.freshMeatTarget.dist}m)`;
         threatTextEl.style.color = '#ec3013';
       } else {
-        threatTextEl.textContent = isZombie ? 'HUNTING' : 'SURVIVING';
-        threatTextEl.style.color = isZombie ? '#ec3013' : 'var(--runner-gold)';
+        threatTextEl.textContent = isZombieRole ? 'HUNTING' : 'SURVIVING';
+        threatTextEl.style.color = isZombieRole ? '#ec3013' : 'var(--runner-gold)';
       }
     }
 
     // 6. 20-Meter Zombie Proximity Threat: Scary Sound & Red Screen Vignette Pulse
-    const isZombieRole = myAssignedRole === 'zombie' || myAssignedRole === 'hunter' || currentRole === 'zombie';
-    const isSurvivor = !isZombieRole;
     const proxBanner = document.getElementById('proximity-warning-banner');
     const proxText = document.getElementById('proximity-warning-text');
     const vignetteEl = document.getElementById('zombie-proximity-vignette');
@@ -2422,17 +2506,7 @@
     } catch (_) {}
   }
 
-  document.getElementById('btn-return-lobby').addEventListener('click', () => {
-    window.soundEngine?.playClick();
-    peerMarkers.forEach((entry) => {
-      if (gameMap && gameMap.hasLayer(entry.marker)) gameMap.removeLayer(entry.marker);
-    });
-    peerMarkers.clear();
-    sessionStorage.removeItem('RFYL_ACTIVE_ROOM');
-    sessionStorage.removeItem('RFYL_ACTIVE_PLAYER_ID');
-    localStorage.removeItem('RFYL_ACTIVE_ROOM');
-    showScreen('landing');
-  });
+  document.getElementById('btn-return-lobby')?.addEventListener('click', leaveActiveMatchAndGoHome);
 
   // Force Ping Test Button (Debug / Optional)
   document.getElementById('btn-force-ping')?.addEventListener('click', () => {
@@ -3203,6 +3277,7 @@
 
   function leaveActiveMatchAndGoHome() {
     closeMatchExitModal();
+    closeAnyActiveModal();
     window.soundEngine?.playClick();
 
     try {
@@ -3210,19 +3285,52 @@
         clearInterval(activeGameClockInterval);
         activeGameClockInterval = null;
       }
+      if (clientOobState?.intervalId) {
+        clearInterval(clientOobState.intervalId);
+        clientOobState.intervalId = null;
+      }
+      if (disconnectBufferInterval) {
+        clearInterval(disconnectBufferInterval);
+        disconnectBufferInterval = null;
+      }
+      if (gpsPollInterval) {
+        clearInterval(gpsPollInterval);
+        gpsPollInterval = null;
+      }
+      if (watchPositionId && navigator.geolocation) {
+        navigator.geolocation.clearWatch(watchPositionId);
+        watchPositionId = null;
+      }
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'LEAVE_ROOM' }));
       }
       if (typeof peerMarkers !== 'undefined' && peerMarkers) {
         peerMarkers.forEach((entry) => {
-          if (gameMap && gameMap.hasLayer(entry.marker)) gameMap.removeLayer(entry.marker);
+          if (gameMap && entry?.marker && gameMap.hasLayer(entry.marker)) {
+            gameMap.removeLayer(entry.marker);
+          }
         });
         peerMarkers.clear();
+      }
+      if (typeof hunterMarkers !== 'undefined' && hunterMarkers) {
+        hunterMarkers.forEach((entry) => {
+          if (gameMap && entry?.marker && gameMap.hasLayer(entry.marker)) {
+            gameMap.removeLayer(entry.marker);
+          }
+        });
+        hunterMarkers.clear();
+      }
+      if (typeof runnerPingMarkers !== 'undefined' && runnerPingMarkers) {
+        runnerPingMarkers.forEach((entry) => {
+          if (gameMap && entry?.marker && gameMap.hasLayer(entry.marker)) {
+            gameMap.removeLayer(entry.marker);
+          }
+        });
+        runnerPingMarkers.clear();
       }
       myRoomCode = null;
       currentRoomData = null;
       sessionStorage.removeItem('RFYL_ACTIVE_ROOM');
-      sessionStorage.removeItem('RFYL_ACTIVE_PLAYER_ID');
       localStorage.removeItem('RFYL_ACTIVE_ROOM');
     } catch (err) {
       console.warn('Cleanup error during leave room:', err);
@@ -3259,6 +3367,7 @@
     if (stream) {
       showTacticalToast('🎙️ Microphone Active for Walkie-Talkie Radio!', '✅');
       refreshHardwareStatus();
+      updateLobbyHardwareStatus();
     } else {
       showTacticalToast('Microphone access denied or unavailable.', '⚠️');
     }
@@ -3280,7 +3389,7 @@
     if (e.target.id === 'match-exit-modal') closeMatchExitModal();
   });
 
-  // --- ANDROID HARDWARE BACK BUTTON INTERCEPTION ---
+  // --- ANDROID HARDWARE & GESTURE BACK BUTTON INTERCEPTION ---
   let lastBackPressTime = 0;
 
   function closeAnyActiveModal() {
@@ -3288,11 +3397,13 @@
       document.getElementById('tutorial-modal'),
       document.getElementById('modal-services-status'),
       document.getElementById('modal-my-qr'),
+      document.getElementById('modal-qr-scanner'),
       document.getElementById('match-exit-modal'),
       document.getElementById('mic-permission-modal'),
       document.getElementById('tag-modal'),
       document.getElementById('photo-lightbox-modal'),
-      document.getElementById('location-permission-modal')
+      document.getElementById('location-permission-modal'),
+      document.getElementById('modal-infection-alert')
     ];
     let closedAny = false;
     modals.forEach((m) => {
@@ -3318,23 +3429,24 @@
       return true;
     }
 
-    // 2. Identify currently active screen
-    const currentActiveScreen = Object.entries(screens).find(([_, el]) => el?.classList.contains('active'))?.[0];
+    // 2. Identify currently active screen directly from DOM
+    const activeEl = document.querySelector('.screen.active');
+    const screenId = activeEl ? activeEl.id : '';
 
     // 3. If in gameplay (hunt or scatter), prompt to abandon match instead of killing the app
-    if (currentActiveScreen === 'hunt' || currentActiveScreen === 'scatter') {
+    if (screenId === 'screen-hunt' || screenId === 'screen-scatter') {
       openMatchExitModal();
       return true;
     }
 
     // 4. If in lobby, host setup, join, or game-over, return to landing screen
-    if (currentActiveScreen === 'lobby' || currentActiveScreen === 'hostSetup' || currentActiveScreen === 'join' || currentActiveScreen === 'gameOver') {
+    if (screenId === 'screen-lobby' || screenId === 'screen-host-setup' || screenId === 'screen-join' || screenId === 'screen-game-over') {
       leaveActiveMatchAndGoHome();
       return true;
     }
 
     // 5. If already on landing screen, require double tap to exit whole app
-    if (currentActiveScreen === 'landing') {
+    if (screenId === 'screen-landing' || !screenId) {
       const now = Date.now();
       if (now - lastBackPressTime < 2500) {
         return 'exit_app';
@@ -3346,6 +3458,40 @@
 
     return false;
   };
+
+  // 6. Mobile browser & gesture popstate integration
+  window.addEventListener('popstate', () => {
+    // 1. Dismiss any open modal first
+    if (closeAnyActiveModal()) {
+      const active = document.querySelector('.screen.active')?.id?.replace('screen-', '') || 'landing';
+      try { window.history.pushState({ screen: active }, '', '#' + active); } catch (_) {}
+      return;
+    }
+
+    const activeEl = document.querySelector('.screen.active');
+    const screenId = activeEl ? activeEl.id : '';
+
+    if (screenId === 'screen-hunt' || screenId === 'screen-scatter') {
+      openMatchExitModal();
+      try { window.history.pushState({ screen: screenId.replace('screen-', '') }, '', '#' + screenId.replace('screen-', '')); } catch (_) {}
+      return;
+    }
+
+    if (screenId === 'screen-lobby' || screenId === 'screen-host-setup' || screenId === 'screen-join' || screenId === 'screen-game-over') {
+      leaveActiveMatchAndGoHome();
+      return;
+    }
+
+    if (screenId === 'screen-landing' || !screenId) {
+      const now = Date.now();
+      if (now - lastBackPressTime < 2500) {
+        return; // Allow native browser exit
+      }
+      lastBackPressTime = now;
+      showTacticalToast('Press BACK again to exit app', '🚪');
+      try { window.history.pushState({ screen: 'landing' }, '', '#landing'); } catch (_) {}
+    }
+  });
 
   setupWalkieTalkie();
 

@@ -432,6 +432,18 @@
       </div>
     </div>
 
+    <!-- Walkie-Talkie & Hardware Readiness Bar in Lobby -->
+    <div id="lobby-hardware-status-row" style="display: flex; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 10px 14px; margin: 10px 0 14px;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span id="lobby-mic-icon" style="font-size: 18px;">🎙️</span>
+        <div style="display: flex; flex-direction: column;">
+          <span style="font-size: 10px; font-family: var(--font-mono); color: var(--parchment-muted); letter-spacing: 0.1em;">SURVIVORS WALKIE-TALKIE</span>
+          <span id="lobby-mic-status-label" style="font-size: 12px; font-weight: 700; color: #34d399;">MIC ACTIVE & READY</span>
+        </div>
+      </div>
+      <button id="btn-lobby-grant-mic" class="btn btn-secondary" style="height: 30px; font-size: 10px; padding: 0 12px; border-color: #10b981; color: #34d399; font-weight: 700; display: none;">GRANT MIC</button>
+    </div>
+
     <span class="eyebrow-badge">Operatives Connected (<span id="lobby-player-count">0</span>)</span>
     <div class="player-list" id="lobby-player-list"></div>
 
@@ -1027,19 +1039,44 @@
     </div>
   </div>
 
-  <!-- MODAL: Location Permission Modal -->
-  <div id="location-permission-modal" class="modal-overlay" style="display: none;">
-    <div class="modal-card">
-      <div class="brand-sigil" style="margin: 0 auto 16px;">
-        <img src="assets/running-logo.svg" alt="Runner" style="width: 24px; height: 24px;">
+  <!-- MODAL: Mission Clearance (GPS & Walkie-Talkie Microphone Permissions) -->
+  <div id="location-permission-modal" class="modal-overlay" style="z-index: 4100;">
+    <div class="modal-card" style="max-width: 390px; text-align: center; border: 1.5px solid rgba(236, 48, 19, 0.4); box-shadow: 0 16px 48px rgba(0,0,0,0.8), 0 0 24px rgba(236, 48, 19, 0.25);">
+      <div class="brand-sigil" style="margin: 0 auto 12px;">
+        <img src="assets/running-logo.svg" alt="Runner" style="width: 28px; height: 28px;">
       </div>
-      <h3 class="modal-title">Enable GPS Location</h3>
-      <p class="modal-desc">
-        <b>Run for Your Life</b> requires your device's live location to place you on the arena map, detect boundaries, and broadcast radar pings.<br><br>
-        Your coordinates are encrypted and streamed live only to operatives in your room.
+      <h3 class="modal-title" style="color: var(--parchment); margin-bottom: 6px; font-size: 18px;">TACTICAL MISSION CLEARANCE</h3>
+      <p class="modal-desc" style="font-size: 12px; color: var(--parchment-muted); margin-bottom: 16px; line-height: 1.4;">
+        To participate in the live operation, authorize your device's tactical sensors:
       </p>
-      <div style="display: flex; flex-direction: column; gap: 10px;">
-        <button id="btn-allow-gps" class="btn btn-primary">Allow Live GPS Feed</button>
+
+      <div style="display: flex; flex-direction: column; gap: 10px; text-align: left; margin-bottom: 18px;">
+        <!-- Permission Item 1: GPS Radar -->
+        <div style="display: flex; align-items: flex-start; gap: 10px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 10px 12px;">
+          <div style="font-size: 20px;">📍</div>
+          <div>
+            <div style="font-size: 13px; font-weight: 700; color: var(--parchment);">GPS Satellite Radar</div>
+            <div style="font-size: 11px; color: var(--parchment-muted); line-height: 1.35;">Live arena position, zone boundaries, and predator sonar proximity alert.</div>
+          </div>
+        </div>
+
+        <!-- Permission Item 2: Walkie-Talkie Mic -->
+        <div style="display: flex; align-items: flex-start; gap: 10px; background: rgba(16, 185, 129, 0.06); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 10px; padding: 10px 12px;">
+          <div style="font-size: 20px;">🎙️</div>
+          <div>
+            <div style="font-size: 13px; font-weight: 700; color: #34d399;">Survivors Walkie-Talkie Radio</div>
+            <div style="font-size: 11px; color: var(--parchment-muted); line-height: 1.35;">Live push-to-talk voice channel for survivors to coordinate escapes.</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <button id="btn-allow-all-permissions" class="btn btn-primary" style="background: #10b981; border-color: #34d399; font-weight: 700; padding: 12px; font-size: 13px;">
+          ⚡ GRANT GPS & WALKIE-TALKIE MIC
+        </button>
+        <button id="btn-allow-gps" class="btn btn-secondary" style="font-size: 11px; padding: 8px; color: var(--parchment-muted);">
+          Allow GPS Only (Radio Muted)
+        </button>
       </div>
     </div>
   </div>
